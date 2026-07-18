@@ -1,0 +1,327 @@
+// src/components/masterdata/PartsTab.jsx
+import { useState } from 'react';
+import { Plus, Pencil, Trash2, Link2 } from 'lucide-react';
+import { useParts } from '../../hooks/useParts';
+import { usePartMutations } from '../../hooks/usePartMutations';
+import { useLines } from '../../hooks/useLines';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import Modal from '../Modal';
+import SearchBar from '../SearchBar';
+import Pagination from '../Pagination';
+import ClMappingModal from './ClMappingModal';
+
+const LIMIT = 20;
+
+const emptyForm = {
+  line_id: '',
+  drawing_no: '',
+  part_name: '',
+  target_shot: '',
+  spare_part_number: '',
+  spare_part_qty: '',
+  spare_part_location: '',
+  spare_part_note: '',
+};
+
+function PartFormModal({ initial, lines, onClose }) {
+  const isEdit = !!initial;
+  const [form, setForm] = useState(
+    initial
+      ? {
+          line_id: initial.line_id,
+          drawing_no: initial.drawing_no,
+          part_name: initial.part_name,
+          target_shot: initial.target_shot,
+          spare_part_number: initial.spare_part_number || '',
+          spare_part_qty: initial.spare_part_qty ?? '',
+          spare_part_location: initial.spare_part_location || '',
+          spare_part_note: initial.spare_part_note || '',
+        }
+      : emptyForm
+  );
+  const [errors, setErrors] = useState({});
+  const { create, update } = usePartMutations();
+  const pending = create.isPending || update.isPending;
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setErrors({});
+    const payload = {
+      line_id: Number(form.line_id),
+      drawing_no: form.drawing_no,
+      part_name: form.part_name,
+      target_shot: Number(form.target_shot),
+      spare_part_number: form.spare_part_number || undefined,
+      spare_part_qty: form.spare_part_qty === '' ? undefined : Number(form.spare_part_qty),
+      spare_part_location: form.spare_part_location || undefined,
+      spare_part_note: form.spare_part_note || undefined,
+    };
+    try {
+      if (isEdit) {
+        await update.mutateAsync({ id: initial.id, payload });
+      } else {
+        await create.mutateAsync(payload);
+      }
+      onClose();
+    } catch (err) {
+      setErrors(err.response?.data?.errors || { _general: err.response?.data?.message || 'Gagal menyimpan Part' });
+    }
+  }
+
+  return (
+    <Modal title={isEdit ? 'Edit Part' : 'Tambah Part'} onClose={onClose} width={520}>
+      <form onSubmit={handleSubmit}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          <div>
+            <label className="form-label">Line</label>
+            <select
+              className="form-select"
+              style={{ width: '100%' }}
+              value={form.line_id}
+              onChange={(e) => setForm({ ...form, line_id: e.target.value })}
+              required
+            >
+              <option value="">Pilih Line</option>
+              {lines.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.line_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Drawing No</label>
+            <input
+              className="form-input mono"
+              style={{ width: '100%' }}
+              value={form.drawing_no}
+              onChange={(e) => setForm({ ...form, drawing_no: e.target.value })}
+              required
+            />
+            {errors.drawing_no && <span style={{ color: 'var(--danger)', fontSize: 11 }}>{errors.drawing_no}</span>}
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label className="form-label">Part Name</label>
+            <input
+              className="form-input"
+              style={{ width: '100%' }}
+              value={form.part_name}
+              onChange={(e) => setForm({ ...form, part_name: e.target.value })}
+              required
+            />
+          </div>
+          <div>
+            <label className="form-label">Target Shot</label>
+            <input
+              type="number"
+              className="form-input mono"
+              style={{ width: '100%', textAlign: 'right' }}
+              value={form.target_shot}
+              min={1}
+              onChange={(e) => setForm({ ...form, target_shot: e.target.value })}
+              required
+            />
+            {errors.target_shot && <span style={{ color: 'var(--danger)', fontSize: 11 }}>{errors.target_shot}</span>}
+          </div>
+
+          <div style={{ gridColumn: '1 / -1', borderTop: '1px solid var(--border-soft)', paddingTop: 10 }}>
+            <span className="caption">Referensi Spare Part (opsional — manual, integrasi Inventory ditunda)</span>
+          </div>
+
+          <div>
+            <label className="form-label">Spare Part Number</label>
+            <input
+              className="form-input mono"
+              style={{ width: '100%' }}
+              value={form.spare_part_number}
+              onChange={(e) => setForm({ ...form, spare_part_number: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="form-label">Qty</label>
+            <input
+              type="number"
+              className="form-input mono"
+              style={{ width: '100%', textAlign: 'right' }}
+              value={form.spare_part_qty}
+              min={0}
+              onChange={(e) => setForm({ ...form, spare_part_qty: e.target.value })}
+            />
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label className="form-label">Lokasi</label>
+            <input
+              className="form-input"
+              style={{ width: '100%' }}
+              value={form.spare_part_location}
+              onChange={(e) => setForm({ ...form, spare_part_location: e.target.value })}
+            />
+          </div>
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label className="form-label">Catatan</label>
+            <textarea
+              className="form-input"
+              style={{ width: '100%', minHeight: 50 }}
+              value={form.spare_part_note}
+              onChange={(e) => setForm({ ...form, spare_part_note: e.target.value })}
+            />
+          </div>
+        </div>
+
+        {errors._general && (
+          <div className="error-state" style={{ marginTop: 12, padding: 8, fontSize: 12 }}>
+            {errors._general}
+          </div>
+        )}
+
+        <button type="submit" className="btn btn-primary" style={{ marginTop: 14 }} disabled={pending}>
+          {pending ? 'Menyimpan...' : 'Simpan'}
+        </button>
+      </form>
+    </Modal>
+  );
+}
+
+function PartsTab() {
+  const [search, setSearch] = useState('');
+  const [lineId, setLineId] = useState('');
+  const [page, setPage] = useState(1);
+  const [modalState, setModalState] = useState(null);
+  const [clMappingPart, setClMappingPart] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
+
+  const debouncedSearch = useDebouncedValue(search);
+  const { data: lines = [] } = useLines({ isActive: true });
+  const { data, isLoading } = useParts({
+    search: debouncedSearch || undefined,
+    line_id: lineId || undefined,
+    page,
+    limit: LIMIT,
+  });
+  const { remove } = usePartMutations();
+
+  async function handleDelete(part) {
+    if (!confirm(`Hapus Part "${part.drawing_no}"?`)) return;
+    setDeleteError('');
+    try {
+      await remove.mutateAsync(part.id);
+    } catch (err) {
+      setDeleteError(err.response?.data?.message || 'Gagal menghapus Part');
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <SearchBar
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            placeholder="Cari drawing no / nama part..."
+          />
+          <select
+            className="form-select"
+            value={lineId}
+            onChange={(e) => {
+              setLineId(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">Semua Line</option>
+            {lines.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.line_name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button type="button" className="btn btn-primary" onClick={() => setModalState({ mode: 'create' })}>
+          <Plus size={14} style={{ verticalAlign: -2, marginRight: 4 }} /> Tambah Part
+        </button>
+      </div>
+
+      {deleteError && (
+        <div className="error-state" style={{ marginBottom: 12, padding: 8, fontSize: 12 }}>
+          {deleteError}
+        </div>
+      )}
+
+      {isLoading && !data && <div className="empty-state">Memuat data...</div>}
+      {data && data.items.length === 0 && <div className="empty-state">Belum ada part yang cocok.</div>}
+
+      {data && data.items.length > 0 && (
+        <>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Line</th>
+                <th>Drawing No / Part Name</th>
+                <th className="mono">Target Shot</th>
+                <th className="mono">CL Count</th>
+                <th>Status</th>
+                <th style={{ width: 130 }}>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map((part) => (
+                <tr key={part.id}>
+                  <td className="mono">{part.line_name}</td>
+                  <td>
+                    <div>{part.part_name}</div>
+                    <div className="caption mono">{part.drawing_no}</div>
+                  </td>
+                  <td className="mono">{part.target_shot.toLocaleString('id-ID')}</td>
+                  <td className="mono">{part.cl_count}</td>
+                  <td className="caption">{part.is_active ? 'Aktif' : 'Nonaktif'}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn-secondary btn"
+                      style={{ padding: 6, marginRight: 4 }}
+                      title="CL Mapping"
+                      onClick={() => setClMappingPart(part)}
+                    >
+                      <Link2 size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary btn"
+                      style={{ padding: 6, marginRight: 4 }}
+                      onClick={() => setModalState({ mode: 'edit', part })}
+                    >
+                      <Pencil size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary btn"
+                      style={{ padding: 6 }}
+                      onClick={() => handleDelete(part)}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pagination page={data.page} limit={data.limit} total={data.total} onPageChange={setPage} />
+        </>
+      )}
+
+      {modalState && (
+        <PartFormModal
+          initial={modalState.mode === 'edit' ? modalState.part : null}
+          lines={lines}
+          onClose={() => setModalState(null)}
+        />
+      )}
+
+      {clMappingPart && <ClMappingModal part={clMappingPart} onClose={() => setClMappingPart(null)} />}
+    </div>
+  );
+}
+
+export default PartsTab;

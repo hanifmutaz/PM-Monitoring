@@ -1,0 +1,137 @@
+// src/services/pmPartService.js
+//
+// Implementasi formula MASTER DOCUMENT Bagian 2.A — TIDAK DIUBAH:
+//   1. Counter Saat Ini   = SUM cross-CL sejak Tgl Pasang Terakhir (SQL layer)
+//   2. Sisa Shot          = Target Shot - Counter Saat Ini
+//   3. Pemakaian/Hari     = rata-rata gabungan Output Actual per hari
+//                           (diturunkan dari Counter / jumlah hari sejak
+//                           Tgl Pasang Terakhir — karena Counter sudah
+//                           merupakan SUM gabungan semua CL No yang share
+//                           part itu, lihat Bagian 2.A poin 1 & 3)
+//   4. Estimasi Tanggal PM = Hari ini + (Sisa Shot / Pemakaian per Hari)
+//   5. Status (threshold dari app_settings, BUKAN hardcode — Dev Rules §18):
+//        Sisa Shot <= danger_multiplier  * Pemakaian/Hari -> DANGER
+//        Sisa Shot <  warning_multiplier * Pemakaian/Hari -> WARNING
+//        selain itu -> OK
+//   6. Hasil % (wear_percentage) = Counter / Target Shot * 100
+
+const pmPartQueries = require('../sql/pmPartQueries');
+const clMappingQueries = require('../sql/clMappingQueries');
+const settingsService = require('./settingsService');
+const dateUtils = require('../utils/dateUtils');
+const AppError = require('../utils/AppError');
+
+function computeMetrics(row, thresholds) {
+  const targetShot = Number(row.target_shot);
+  const counter = Number(row.counter);
+  const remainingShot = targetShot - counter;
+
+  const daysSinceInstall = dateUtils.daysSince(row.last_tgl_ganti);
+  // Pemakaian/Hari: rata-rata sejak part dipasang. Kalau belum pernah ada
+  // riwayat pemasangan (last_tgl_ganti null) atau baru dipasang hari ini
+  // (daysSinceInstall <= 0), belum ada basis rata-rata yang valid -> 0
+  // (bukan divide-by-zero / bukan Infinity).
+  const usagePerDay =
+    daysSinceInstall && daysSinceInstall > 0 ? counter / daysSinceInstall : 0;
+
+  let status = 'OK';
+  let estimatedPmDate = null;
+
+  if (usagePerDay > 0) {
+    if (remainingShot <= thresholds.danger * usagePerDay) {
+      status = 'DANGER';
+    } else if (remainingShot < thresholds.warning * usagePerDay) {
+      status = 'WARNING';
+    }
+    estimatedPmDate = dateUtils.addDaysToToday(Math.max(remainingShot, 0) / usagePerDay);
+  } else {
+    // Tidak ada data pemakaian -> tidak bisa estimasi tanggal. Status DANGER
+    // tetap berlaku kalau part sudah kelebihan/pas target (remaining <= 0),
+    // supaya part yang overdue tidak "tersembunyi" sebagai OK gara-gara
+    // belum ada histori pemakaian terkini.
+    if (remainingShot <= 0) {
+      status = 'DANGER';
+      estimatedPmDate = dateUtils.todayString();
+    }
+  }
+
+  const wearPercentage = targetShot > 0 ? Math.round((counter / targetShot) * 100) : 0;
+
+  return {
+    part_id: row.part_id,
+    line_id: row.line_id,
+    line_name: row.line_name,
+    drawing_no: row.drawing_no,
+    part_name: row.part_name,
+    counter,
+    target_shot: targetShot,
+    remaining_shot: remainingShot,
+    usage_per_day: Math.round(usagePerDay * 100) / 100,
+    estimated_pm_date: estimatedPmDate,
+    status,
+    wear_percentage: wearPercentage,
+  };
+}
+
+async function getThresholds() {
+  const settings = await settingsService.getSettings(['pm_part_danger_multiplier', 'pm_part_warning_multiplier']);
+  return {
+    danger: settings.pm_part_danger_multiplier,
+    warning: settings.pm_part_warning_multiplier,
+  };
+}
+
+/**
+ * Hitung metrics semua part aktif (tanpa filter/pagination) - dipakai
+ * internal oleh listPmPart() DAN oleh dashboardService (DRY, Dev Rules §2)
+ * supaya rumus status/threshold cuma ada di satu tempat.
+ */
+async function getAllComputedMetrics({ lineId, search } = {}) {
+  const thresholds = await getThresholds();
+  const rows = await pmPartQueries.findAllWithCounter({ lineId, search });
+  return rows.map((row) => computeMetrics(row, thresholds));
+}
+
+async function listPmPart({ lineId, status, search, page, limit }) {
+  let computed = await getAllComputedMetrics({ lineId, search });
+
+  if (status) {
+    computed = computed.filter((item) => item.status === status.toUpperCase());
+  }
+
+  const pageNum = Number(page) > 0 ? Number(page) : 1;
+  const limitNum = Number(limit) > 0 ? Number(limit) : 20;
+  const total = computed.length;
+  const start = (pageNum - 1) * limitNum;
+  const items = computed.slice(start, start + limitNum);
+
+  return { items, total, page: pageNum, limit: limitNum };
+}
+
+async function getPmPartDetail(partId) {
+  const thresholds = await getThresholds();
+  const row = await pmPartQueries.findOneWithCounter(partId);
+  if (!row) {
+    throw AppError.notFound('Part tidak ditemukan');
+  }
+
+  const metrics = computeMetrics(row, thresholds);
+  const clMappings = await clMappingQueries.findByPartId(partId);
+  const recentHistory = await pmPartQueries.findRecentHistory(partId, 5);
+
+  return {
+    ...metrics,
+    cl_mapping: clMappings,
+    recent_history: recentHistory.map((h) => ({
+      id: h.id,
+      tgl_ganti: dateUtils.formatDate(h.tgl_ganti),
+      shift: h.shift,
+      counter_saat_diganti: Number(h.counter_saat_diganti),
+      jenis_penggantian: h.jenis_penggantian,
+      remark: h.remark,
+      user_full_name: h.user_full_name,
+    })),
+  };
+}
+
+module.exports = { listPmPart, getPmPartDetail, getAllComputedMetrics, computeMetrics };
