@@ -17,6 +17,18 @@ module.exports = {
 
   databaseUrl: process.env.DATABASE_URL,
 
+  // Kredensial DB ConMas TIDAK di-require saat startup (§REQUIRED_VARS) -
+  // supaya app tetap bisa jalan buat development/testing walau ConMas
+  // belum/gak bisa diakses. Sync job (src/jobs/conmasSyncJob.js) yang
+  // handle kalau kredensial ini kosong/salah, bukan bikin seluruh app crash.
+  conmas: {
+    host: process.env.CONMAS_DB_HOST,
+    port: parseInt(process.env.CONMAS_DB_PORT, 10) || 5432,
+    database: process.env.CONMAS_DB_NAME,
+    user: process.env.CONMAS_DB_USER,
+    password: process.env.CONMAS_DB_PASSWORD,
+  },
+
   jwt: {
     secret: process.env.JWT_SECRET,
     expiresIn: process.env.JWT_EXPIRES_IN || '8h',
