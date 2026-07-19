@@ -7,10 +7,6 @@ const env = require('../config/env');
 
 const COOKIE_NAME = 'token';
 
-// Secure flag butuh HTTPS aktif. Di production (NGINX+Tailscale) selalu HTTPS,
-// di local dev (http://localhost) Secure harus off supaya cookie kebaca browser.
-// Ini bukan deviasi dari keputusan dokumen (httpOnly + SameSite=Strict tetap
-// dipertahankan) — cuma penyesuaian environment dev vs prod yang lazim.
 function cookieOptions() {
   return {
     httpOnly: true,
@@ -28,18 +24,21 @@ const login = asyncHandler(async (req, res) => {
   }
 
   const { username, password } = req.body;
-  const { token, user } = await authService.login(username, password);
+  const context = { ip: req.ip, userAgent: req.get('user-agent') };
+  const { token, user } = await authService.login(username, password, context);
 
   res.cookie(COOKIE_NAME, token, cookieOptions());
 
   res.status(200).json({
     success: true,
     message: 'Success',
-    data: { token, user },
+    data: { user },
   });
 });
 
 const logout = asyncHandler(async (req, res) => {
+  const context = { ip: req.ip, userAgent: req.get('user-agent') };
+  await authService.logout(req.user.username, req.user.id, context);
   res.clearCookie(COOKIE_NAME, { ...cookieOptions(), maxAge: undefined });
   res.status(200).json({ success: true, message: 'Logged out' });
 });

@@ -1,17 +1,9 @@
 // src/middlewares/authMiddleware.js
 const { verifyToken } = require('../utils/jwt');
+const userQueries = require('../sql/userQueries');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 
-/**
- * Semua endpoint kecuali /auth/login wajib lewat middleware ini
- * (03_API_SPECIFICATION.md - "Semua endpoint (kecuali login) wajib
- * melalui middleware auth + role check").
- *
- * Token dibaca dari httpOnly cookie `token` (keputusan JWT storage di
- * 06_ENVIRONMENT_AND_BOOTSTRAP.md §3), bukan header Authorization —
- * karena frontend tidak menyimpan/mengirim token secara manual.
- */
 const requireAuth = asyncHandler(async (req, res, next) => {
   const token = req.cookies && req.cookies.token;
 
@@ -19,13 +11,26 @@ const requireAuth = asyncHandler(async (req, res, next) => {
     throw AppError.unauthorized('Token tidak ada');
   }
 
+  let payload;
   try {
-    const payload = verifyToken(token);
-    req.user = payload; // { id, username, role }
-    next();
+    payload = verifyToken(token);
   } catch (err) {
     throw AppError.unauthorized('Token tidak valid atau expired');
   }
+
+  const user = await userQueries.findUserById(payload.id);
+
+  if (!user || !user.is_active) {
+    throw AppError.unauthorized('User tidak ditemukan atau tidak aktif');
+  }
+
+  req.user = {
+    id: user.id,
+    username: user.username,
+    full_name: user.full_name,
+    role: user.role_name,
+  };
+  next();
 });
 
 module.exports = requireAuth;

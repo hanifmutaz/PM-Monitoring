@@ -1,5 +1,6 @@
 // app.js
 const express = require('express');
+const helmet = require('helmet');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const env = require('./src/config/env');
@@ -7,6 +8,10 @@ const routes = require('./src/routes');
 const { errorHandler, notFoundHandler } = require('./src/middlewares/errorHandler');
 
 const app = express();
+
+app.set('trust proxy', 1);
+
+app.use(helmet());
 
 app.use(
   cors({

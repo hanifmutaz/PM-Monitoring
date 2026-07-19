@@ -4,6 +4,25 @@
 const db = require('../config/db');
 
 /**
+ * Ambil user by username TANPA filter is_active — dipakai khusus di login
+ * flow supaya bisa membedakan "user tidak ada" vs "user ada tapi
+ * dinonaktifkan" untuk keperluan login_audit_log (SECURITY_REVIEW.md
+ * Finding #2). Pesan error ke CLIENT tetap generik di manapun — pembedaan
+ * ini murni untuk log internal, tidak pernah dikirim ke response.
+ */
+async function findByUsernameAnyStatus(username) {
+  const result = await db.query(
+    `SELECT u.id, u.username, u.password_hash, u.full_name, u.is_active,
+            r.id AS role_id, r.name AS role_name
+     FROM users u
+     JOIN roles r ON r.id = u.role_id
+     WHERE u.username = $1`,
+    [username]
+  );
+  return result.rows[0] || null;
+}
+
+/**
  * Ambil user by username, join role_name, hanya user aktif.
  */
 async function findActiveUserByUsername(username) {
@@ -94,6 +113,16 @@ async function roleExists(roleId, runner = db) {
   return !!result.rows[0];
 }
 
+/**
+ * Dipakai murni untuk membangun pesan audit log yang mudah dibaca manusia
+ * (SECURITY_REVIEW.md Finding #5), mis. "Role diubah: Operator -> Supervisor".
+ * Bukan untuk keperluan otorisasi (itu selalu lewat requireRole/req.user.role).
+ */
+async function findRoleNameById(roleId, runner = db) {
+  const result = await runner.query(`SELECT name FROM roles WHERE id = $1`, [roleId]);
+  return result.rows[0] ? result.rows[0].name : null;
+}
+
 async function createUser({ username, passwordHash, fullName, roleId }, runner = db) {
   const result = await runner.query(
     `INSERT INTO users (username, password_hash, role_id, full_name, is_active)
@@ -129,12 +158,14 @@ async function updateUser(id, fields, runner = db) {
 
 module.exports = {
   findActiveUserByUsername,
+  findByUsernameAnyStatus,
   findUserById,
   updateLastLogin,
   findAll,
   findRawById,
   usernameExists,
   roleExists,
+  findRoleNameById,
   createUser,
   updateUser,
 };

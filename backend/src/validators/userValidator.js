@@ -1,4 +1,5 @@
 // src/validators/userValidator.js
+const { validatePassword } = require('../utils/passwordPolicy');
 
 function validateCreateUser(body) {
   const errors = {};
@@ -9,8 +10,11 @@ function validateCreateUser(body) {
     errors.username = 'Username maksimal 50 karakter';
   }
 
-  if (!body || typeof body.password !== 'string' || body.password.length < 8) {
-    errors.password = 'Password wajib diisi, minimal 8 karakter';
+  if (!body || typeof body.password !== 'string') {
+    errors.password = 'Password wajib diisi';
+  } else {
+    const { valid, error } = validatePassword(body.password, body.username);
+    if (!valid) errors.password = error;
   }
 
   if (!body || typeof body.full_name !== 'string' || body.full_name.trim() === '') {
@@ -37,8 +41,11 @@ function validateUpdateUser(body) {
     }
   }
   if (body.password !== undefined) {
-    if (typeof body.password !== 'string' || body.password.length < 8) {
-      errors.password = 'Password minimal 8 karakter';
+    if (typeof body.password !== 'string') {
+      errors.password = 'Password harus berupa teks';
+    } else {
+      const { valid, error } = validatePassword(body.password, body.username);
+      if (!valid) errors.password = error;
     }
   }
   if (body.full_name !== undefined) {
