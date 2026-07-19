@@ -27,10 +27,6 @@ function computeMetrics(row, thresholds) {
   const remainingShot = targetShot - counter;
 
   const daysSinceInstall = dateUtils.daysSince(row.last_tgl_ganti);
-  // Pemakaian/Hari: rata-rata sejak part dipasang. Kalau belum pernah ada
-  // riwayat pemasangan (last_tgl_ganti null) atau baru dipasang hari ini
-  // (daysSinceInstall <= 0), belum ada basis rata-rata yang valid -> 0
-  // (bukan divide-by-zero / bukan Infinity).
   const usagePerDay =
     daysSinceInstall && daysSinceInstall > 0 ? counter / daysSinceInstall : 0;
 
@@ -45,10 +41,6 @@ function computeMetrics(row, thresholds) {
     }
     estimatedPmDate = dateUtils.addDaysToToday(Math.max(remainingShot, 0) / usagePerDay);
   } else {
-    // Tidak ada data pemakaian -> tidak bisa estimasi tanggal. Status DANGER
-    // tetap berlaku kalau part sudah kelebihan/pas target (remaining <= 0),
-    // supaya part yang overdue tidak "tersembunyi" sebagai OK gara-gara
-    // belum ada histori pemakaian terkini.
     if (remainingShot <= 0) {
       status = 'DANGER';
       estimatedPmDate = dateUtils.todayString();
@@ -81,11 +73,6 @@ async function getThresholds() {
   };
 }
 
-/**
- * Hitung metrics semua part aktif (tanpa filter/pagination) - dipakai
- * internal oleh listPmPart() DAN oleh dashboardService (DRY, Dev Rules §2)
- * supaya rumus status/threshold cuma ada di satu tempat.
- */
 async function getAllComputedMetrics({ lineId, search } = {}) {
   const thresholds = await getThresholds();
   const rows = await pmPartQueries.findAllWithCounter({ lineId, search });
@@ -93,14 +80,23 @@ async function getAllComputedMetrics({ lineId, search } = {}) {
 }
 
 async function listPmPart({ lineId, status, search, page, limit }) {
-  let computed = await getAllComputedMetrics({ lineId, search });
-
-  if (status) {
-    computed = computed.filter((item) => item.status === status.toUpperCase());
-  }
-
   const pageNum = Number(page) > 0 ? Number(page) : 1;
   const limitNum = Number(limit) > 0 ? Number(limit) : 20;
+
+  if (!status) {
+    const offset = (pageNum - 1) * limitNum;
+    const thresholds = await getThresholds();
+    const [rows, total] = await Promise.all([
+      pmPartQueries.findAllWithCounter({ lineId, search, limit: limitNum, offset }),
+      pmPartQueries.countAll({ lineId, search }),
+    ]);
+    const items = rows.map((row) => computeMetrics(row, thresholds));
+    return { items, total, page: pageNum, limit: limitNum };
+  }
+
+  let computed = await getAllComputedMetrics({ lineId, search });
+  computed = computed.filter((item) => item.status === status.toUpperCase());
+
   const total = computed.length;
   const start = (pageNum - 1) * limitNum;
   const items = computed.slice(start, start + limitNum);

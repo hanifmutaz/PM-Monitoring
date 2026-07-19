@@ -1,16 +1,32 @@
-// src/services/dashboardService.js
-//
-// Development Rules §23: "Dashboard tidak boleh menghitung business logic
-// sendiri di frontend [maupun backend-nya sendiri]. Dashboard hanya membaca
-// hasil yang sudah dihitung oleh Service." Semua angka di sini murni
-// agregasi (count/filter/sort) dari pmPartService & pmLineService yang
-// SUDAH menghitung status/threshold — tidak ada rumus PM baru di file ini.
-
 const dashboardQueries = require('../sql/dashboardQueries');
 const pmPartService = require('./pmPartService');
 const pmLineService = require('./pmLineService');
 const settingsService = require('./settingsService');
 const dateUtils = require('../utils/dateUtils');
+
+const DASHBOARD_CACHE_TTL_MS = 5000;
+const cache = new Map();
+
+function getCached(key, computeFn) {
+  const now = Date.now();
+  const entry = cache.get(key);
+  if (entry && entry.expiresAt > now) {
+    return entry.promise;
+  }
+
+  const promise = computeFn();
+  cache.set(key, { promise, expiresAt: now + DASHBOARD_CACHE_TTL_MS });
+  promise.catch(() => cache.delete(key));
+  return promise;
+}
+
+function getCachedPartMetrics() {
+  return getCached('partMetrics', () => pmPartService.getAllComputedMetrics());
+}
+
+function getCachedLineStatuses() {
+  return getCached('lineStatuses', () => pmLineService.getPmLineStatus({}));
+}
 
 const STATUS_RANK = { OK: 0, WARNING: 1, DANGER: 2 };
 
@@ -20,8 +36,8 @@ function worstStatus(a, b) {
 
 async function getSummary() {
   const [partMetrics, lineStatuses, totalParts, activeLines] = await Promise.all([
-    pmPartService.getAllComputedMetrics(),
-    pmLineService.getPmLineStatus({}),
+    getCachedPartMetrics(),
+    getCachedLineStatuses(),
     dashboardQueries.countAllParts(),
     dashboardQueries.countActiveLines(),
   ]);
@@ -29,10 +45,6 @@ async function getSummary() {
   const statusCounts = { OK: 0, WARNING: 0, DANGER: 0 };
   for (const p of partMetrics) statusCounts[p.status] += 1;
 
-  // Status gabungan per Line = status terburuk antara Monthly & Weekly
-  // (interpretasi presentasi Dashboard - bukan rumus PM baru, cuma cara
-  // mengelompokkan 2 status yang sudah dihitung pmLineService jadi 1
-  // kategori kesehatan Line untuk KPI card).
   const lineBuckets = { OK: 0, WARNING: 0, DANGER: 0 };
   for (const l of lineStatuses) {
     const worst = worstStatus(l.status_monthly, l.status_weekly);
@@ -53,7 +65,7 @@ async function getSummary() {
 
 async function getAttention() {
   const limit = (await settingsService.getSetting('dashboard_upcoming_pm_limit')) || 10;
-  const partMetrics = await pmPartService.getAllComputedMetrics();
+  const partMetrics = await getCachedPartMetrics();
 
   return partMetrics
     .filter((p) => p.status === 'WARNING' || p.status === 'DANGER')
@@ -72,8 +84,8 @@ function withinUpcomingWindow(dateStr) {
 
 async function getUpcoming() {
   const [partMetrics, lineStatuses] = await Promise.all([
-    pmPartService.getAllComputedMetrics(),
-    pmLineService.getPmLineStatus({}),
+    getCachedPartMetrics(),
+    getCachedLineStatuses(),
   ]);
 
   const items = [];

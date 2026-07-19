@@ -1,4 +1,5 @@
 // src/services/userManagementService.js
+
 const bcrypt = require('bcrypt');
 const db = require('../config/db');
 const userQueries = require('../sql/userQueries');
@@ -7,8 +8,7 @@ const AppError = require('../utils/AppError');
 
 const BCRYPT_ROUNDS = 10;
 
-
-async function buildUserUpdateDetail({ before, fields, updated, passwordWasReset, client }) {
+async function buildUserUpdateDetail({ before, fields, passwordWasReset, client }) {
   const parts = [];
 
   if (fields.role_id !== undefined && fields.role_id !== before.role_id) {
@@ -127,9 +127,6 @@ async function updateUser(id, fields, actorUserId) {
 
     const actionDetail = await buildUserUpdateDetail({ before, fields, updated, passwordWasReset, client });
 
-    // `before` (findRawById) dan `updated` (RETURNING di userQueries.updateUser)
-    // sama-sama TIDAK mengandung password_hash — jadi aman dipakai langsung
-    // sebagai old_value/new_value tanpa perlu strip manual lagi di sini.
     await recordAudit(
       { tableName: 'users', recordId: id, action: 'UPDATE', oldValue: before, newValue: updated, userId: actorUserId, actionDetail },
       client

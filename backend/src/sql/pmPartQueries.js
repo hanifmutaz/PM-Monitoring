@@ -1,21 +1,3 @@
-// src/sql/pmPartQueries.js
-//
-// Query counter di sini adalah implementasi LANGSUNG dari "Query kunci —
-// Counter PM Part (final)" di MASTER DOCUMENT Bagian 3:
-//
-//   SELECT COALESCE(SUM(pc.output_actual), 0)
-//   FROM production_cache pc
-//   WHERE pc.line_id = :line_id
-//     AND pc.cl_no IN (SELECT cl_no FROM part_cl_mapping WHERE part_id = :part_id)
-//     AND pc.tanggal >= (SELECT MAX(tgl_ganti) FROM pm_part_history WHERE part_id = :part_id);
-//
-// Ditulis ulang jadi versi SET-BASED (CTE) supaya bisa jalan untuk SEMUA
-// part sekaligus dalam 1 query (Development Rules §20 — dilarang N+1 Query),
-// tapi HASIL dan SEMANTIK-nya identik dengan query kunci di atas:
-//   - Part tanpa riwayat penggantian (pm_part_history kosong) -> counter = 0
-//     (karena MAX(tgl_ganti) NULL bikin kondisi tanggal >= NULL selalu UNKNOWN,
-//     persis seperti versi single-part di atas).
-
 const db = require('../config/db');
 
 const COUNTER_CTE = `
@@ -37,12 +19,7 @@ const COUNTER_CTE = `
   )
 `;
 
-/**
- * List semua part aktif + counter cross-CL + tanggal pasang terakhir.
- * Perhitungan status/threshold/estimasi dilakukan di Service layer
- * (business logic tidak boleh ada di SQL Layer — Development Rules §7).
- */
-async function findAllWithCounter({ lineId, search } = {}, runner = db) {
+async function findAllWithCounter({ lineId, search, limit, offset } = {}, runner = db) {
   const conditions = ['p.is_active = TRUE'];
   const params = [];
 
@@ -57,6 +34,14 @@ async function findAllWithCounter({ lineId, search } = {}, runner = db) {
 
   const where = `WHERE ${conditions.join(' AND ')}`;
 
+  let limitOffsetClause = '';
+  if (Number.isInteger(limit) && Number.isInteger(offset)) {
+    params.push(limit);
+    limitOffsetClause += ` LIMIT $${params.length}`;
+    params.push(offset);
+    limitOffsetClause += ` OFFSET $${params.length}`;
+  }
+
   const result = await runner.query(
     `${COUNTER_CTE}
      SELECT
@@ -68,11 +53,35 @@ async function findAllWithCounter({ lineId, search } = {}, runner = db) {
      LEFT JOIN part_counter pcnt ON pcnt.part_id = p.id
      LEFT JOIN part_last_ganti plg ON plg.part_id = p.id
      ${where}
-     ORDER BY l.line_name ASC, p.drawing_no ASC`,
+     ORDER BY l.line_name ASC, p.drawing_no ASC
+     ${limitOffsetClause}`,
     params
   );
 
   return result.rows;
+}
+
+/**
+ * Hitung total part aktif yang match filter lineId/search (TANPA status —
+ * lihat catatan di findAllWithCounter soal kenapa status tidak bisa masuk
+ * sini). Dipakai untuk metadata pagination di jalur "tanpa filter status".
+ */
+async function countAll({ lineId, search } = {}, runner = db) {
+  const conditions = ['p.is_active = TRUE'];
+  const params = [];
+
+  if (lineId) {
+    params.push(lineId);
+    conditions.push(`p.line_id = $${params.length}`);
+  }
+  if (search) {
+    params.push(`%${search}%`);
+    conditions.push(`(p.part_name ILIKE $${params.length} OR p.drawing_no ILIKE $${params.length})`);
+  }
+
+  const where = `WHERE ${conditions.join(' AND ')}`;
+  const result = await runner.query(`SELECT COUNT(*)::int AS total FROM parts p ${where}`, params);
+  return result.rows[0].total;
 }
 
 /**
@@ -112,4 +121,4 @@ async function findRecentHistory(partId, limit = 5, runner = db) {
   return result.rows;
 }
 
-module.exports = { findAllWithCounter, findOneWithCounter, findRecentHistory };
+module.exports = { findAllWithCounter, countAll, findOneWithCounter, findRecentHistory };

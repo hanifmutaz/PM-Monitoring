@@ -3,8 +3,11 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const pinoHttp = require('pino-http');
+const crypto = require('crypto');
 const env = require('./src/config/env');
 const routes = require('./src/routes');
+const logger = require('./src/utils/logger');
 const { errorHandler, notFoundHandler } = require('./src/middlewares/errorHandler');
 
 const app = express();
@@ -12,6 +15,18 @@ const app = express();
 app.set('trust proxy', 1);
 
 app.use(helmet());
+
+app.use(
+  pinoHttp({
+    logger: logger.pinoInstance,
+    genReqId: (req, res) => {
+      const existing = req.headers['x-request-id'];
+      const id = existing || crypto.randomUUID();
+      res.setHeader('x-request-id', id);
+      return id;
+    },
+  })
+);
 
 app.use(
   cors({

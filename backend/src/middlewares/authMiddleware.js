@@ -14,7 +14,7 @@ const requireAuth = asyncHandler(async (req, res, next) => {
   let payload;
   try {
     payload = verifyToken(token);
-  } catch (err) {
+  } catch {
     throw AppError.unauthorized('Token tidak valid atau expired');
   }
 
