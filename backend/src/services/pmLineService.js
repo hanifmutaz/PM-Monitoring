@@ -13,13 +13,13 @@
 //     Estimasi PM Monthly = Hari Ini + Sisa Hari Monthly
 //     Status: <= pm_monthly_danger_days -> DANGER, < pm_monthly_warning_days -> WARNING, else OK
 //
-// CATATAN PENTING: akumulasi_poin_monthly di sini DIBACA APA ADANYA dari
-// cache pm_monthly_helper. Job harian yang MENAMBAH poin ini berdasarkan
-// "berapa kali Line running per hari" BELUM dibangun — itu butuh info
-// struktur data ConMas (production_cache per slot/shift) yang belum
-// tersedia (blocker sama seperti Adapter Sync Fase 3, lihat MASTER
-// DOCUMENT Bagian 5/6 "Hidden requirements"). Endpoint di bawah ini tetap
-// 100% benar secara formula begitu job itu ada.
+// CATATAN: akumulasi_poin_monthly di sini DIBACA APA ADANYA dari cache
+// pm_monthly_helper. Job harian yang MENAMBAH poin ini berdasarkan "berapa
+// kali Line running per hari" sudah dibangun di
+// services/pmMonthlyAccrualService.js, dijalankan otomatis lewat
+// jobs/conmasSyncJob.js (cron) setelah struktur data ConMas
+// (production_cache per slot/shift) dikonfirmasi tersedia — lihat
+// PROJECT_SCOPE.md untuk riwayat status Fase 3.
 
 const pmLineQueries = require('../sql/pmLineQueries');
 const settingsService = require('./settingsService');

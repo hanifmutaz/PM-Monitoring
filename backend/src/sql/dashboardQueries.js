@@ -12,12 +12,13 @@ async function countActiveLines(runner = db) {
 }
 
 /**
- * Status sync production_cache terakhir. Karena Adapter Sync ConMas
- * (MASTER DOCUMENT Fase 3) belum dibangun (lihat catatan blocker di
- * pmLineService.js / pmPartService.js), tidak ada log job terpisah untuk
- * sync ini — satu-satunya jejak yang tersedia adalah kolom `synced_at` di
- * production_cache sendiri. Endpoint ini baca apa adanya dari situ; begitu
- * job sync beneran ada, hasilnya otomatis ikut akurat tanpa perlu ubah query.
+ * Status sync production_cache terakhir. Adapter Sync ConMas (MASTER
+ * DOCUMENT Fase 3) sudah dibangun (services/conmasSyncService.js +
+ * jobs/conmasSyncJob.js), tapi belum ada tabel log job terpisah — jejak
+ * yang tersedia masih dari kolom `synced_at` di production_cache sendiri.
+ * Endpoint ini baca apa adanya dari situ; kalau nanti ditambah tabel log
+ * job terpisah, endpoint ini bisa diarahkan ke situ tanpa breaking change
+ * di kontrak response-nya.
  */
 async function getLastSyncInfo(runner = db) {
   const result = await runner.query(
