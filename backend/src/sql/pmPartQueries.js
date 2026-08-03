@@ -45,7 +45,7 @@ async function findAllWithCounter({ lineId, search, limit, offset } = {}, runner
   const result = await runner.query(
     `${COUNTER_CTE}
      SELECT
-       p.id AS part_id, p.line_id, l.line_name, p.drawing_no, p.part_name, p.target_shot,
+       p.id AS part_id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name, p.target_shot,
        COALESCE(pcnt.counter, 0) AS counter,
        plg.last_tgl_ganti
      FROM parts p
@@ -53,7 +53,7 @@ async function findAllWithCounter({ lineId, search, limit, offset } = {}, runner
      LEFT JOIN part_counter pcnt ON pcnt.part_id = p.id
      LEFT JOIN part_last_ganti plg ON plg.part_id = p.id
      ${where}
-     ORDER BY l.line_name ASC, p.drawing_no ASC
+     ORDER BY l.line_name ASC, p.jig_name ASC, p.drawing_no ASC
      ${limitOffsetClause}`,
     params
   );
@@ -91,7 +91,7 @@ async function findOneWithCounter(partId, runner = db) {
   const result = await runner.query(
     `${COUNTER_CTE}
      SELECT
-       p.id AS part_id, p.line_id, l.line_name, p.drawing_no, p.part_name, p.target_shot,
+       p.id AS part_id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name, p.target_shot,
        COALESCE(pcnt.counter, 0) AS counter,
        plg.last_tgl_ganti
      FROM parts p

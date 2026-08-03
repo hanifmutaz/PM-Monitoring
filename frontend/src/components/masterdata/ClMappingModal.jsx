@@ -29,7 +29,7 @@ function ClMappingModal({ part, onClose }) {
   }
 
   return (
-    <Modal title={`CL Mapping — ${part.drawing_no}`} onClose={onClose} width={520}>
+    <Modal title={`CL Mapping — ${part.drawing_no} (${part.jig_name})`} onClose={onClose} width={520}>
       {isLoading ? (
         <div className="empty-state">Memuat data...</div>
       ) : (

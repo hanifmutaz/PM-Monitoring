@@ -14,6 +14,7 @@ const LIMIT = 20;
 
 const emptyForm = {
   line_id: '',
+  jig_name: '',
   drawing_no: '',
   part_name: '',
   target_shot: '',
@@ -29,6 +30,7 @@ function PartFormModal({ initial, lines, onClose }) {
     initial
       ? {
           line_id: initial.line_id,
+          jig_name: initial.jig_name,
           drawing_no: initial.drawing_no,
           part_name: initial.part_name,
           target_shot: initial.target_shot,
@@ -48,6 +50,7 @@ function PartFormModal({ initial, lines, onClose }) {
     setErrors({});
     const payload = {
       line_id: Number(form.line_id),
+      jig_name: form.jig_name,
       drawing_no: form.drawing_no,
       part_name: form.part_name,
       target_shot: Number(form.target_shot),
@@ -88,6 +91,18 @@ function PartFormModal({ initial, lines, onClose }) {
                 </option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="form-label">Jig Name</label>
+            <input
+              className="form-input"
+              style={{ width: '100%' }}
+              value={form.jig_name}
+              onChange={(e) => setForm({ ...form, jig_name: e.target.value })}
+              placeholder="mis. Contact Cutting A"
+              required
+            />
+            {errors.jig_name && <span style={{ color: 'var(--danger)', fontSize: 11 }}>{errors.jig_name}</span>}
           </div>
           <div>
             <label className="form-label">Drawing No</label>
@@ -201,7 +216,7 @@ function PartsTab() {
   const { remove } = usePartMutations();
 
   async function handleDelete(part) {
-    if (!confirm(`Hapus Part "${part.drawing_no}"?`)) return;
+    if (!confirm(`Hapus Part "${part.drawing_no}" (Jig: ${part.jig_name})?`)) return;
     setDeleteError('');
     try {
       await remove.mutateAsync(part.id);
@@ -258,6 +273,7 @@ function PartsTab() {
             <thead>
               <tr>
                 <th>Line</th>
+                <th>Jig</th>
                 <th>Drawing No / Part Name</th>
                 <th className="mono">Target Shot</th>
                 <th className="mono">CL Count</th>
@@ -269,6 +285,7 @@ function PartsTab() {
               {data.items.map((part) => (
                 <tr key={part.id}>
                   <td className="mono">{part.line_name}</td>
+                  <td className="caption">{part.jig_name}</td>
                   <td>
                     <div>{part.part_name}</div>
                     <div className="caption mono">{part.drawing_no}</div>

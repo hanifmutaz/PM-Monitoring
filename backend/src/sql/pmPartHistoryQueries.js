@@ -3,7 +3,7 @@ const db = require('../config/db');
 
 const LIST_SELECT = `
   SELECT
-    h.id, h.part_id, p.line_id, l.line_name, p.drawing_no, p.part_name,
+    h.id, h.part_id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name,
     h.tgl_ganti, h.shift, h.counter_saat_diganti, h.jenis_penggantian, h.remark,
     h.user_id, u.full_name AS user_full_name, h.created_at
   FROM pm_part_history h

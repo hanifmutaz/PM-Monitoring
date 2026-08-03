@@ -6,6 +6,11 @@ function validateCreatePart(body) {
   if (!body || !Number.isInteger(body.line_id)) {
     errors.line_id = 'Line ID wajib diisi (integer)';
   }
+  if (!body || typeof body.jig_name !== 'string' || body.jig_name.trim() === '') {
+    errors.jig_name = 'Jig Name wajib diisi';
+  } else if (body.jig_name.length > 150) {
+    errors.jig_name = 'Jig Name maksimal 150 karakter';
+  }
   if (!body || typeof body.drawing_no !== 'string' || body.drawing_no.trim() === '') {
     errors.drawing_no = 'Drawing No wajib diisi';
   } else if (body.drawing_no.length > 100) {
@@ -33,6 +38,13 @@ function validateUpdatePart(body) {
 
   if (body.line_id !== undefined && !Number.isInteger(body.line_id)) {
     errors.line_id = 'Line ID harus integer';
+  }
+  if (body.jig_name !== undefined) {
+    if (typeof body.jig_name !== 'string' || body.jig_name.trim() === '') {
+      errors.jig_name = 'Jig Name tidak boleh kosong';
+    } else if (body.jig_name.length > 150) {
+      errors.jig_name = 'Jig Name maksimal 150 karakter';
+    }
   }
   if (body.drawing_no !== undefined) {
     if (typeof body.drawing_no !== 'string' || body.drawing_no.trim() === '') {

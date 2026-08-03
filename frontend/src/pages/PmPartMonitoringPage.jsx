@@ -92,7 +92,9 @@ function PmPartMonitoringPage() {
                     <td className="mono">{item.line_name}</td>
                     <td>
                       <div>{item.part_name}</div>
-                      <div className="caption mono">{item.drawing_no}</div>
+                      <div className="caption mono">
+                        {item.drawing_no} <span className="caption">({item.jig_name})</span>
+                      </div>
                     </td>
                     <td className="mono">{item.counter.toLocaleString('id-ID')}</td>
                     <td className="mono">{item.target_shot.toLocaleString('id-ID')}</td>

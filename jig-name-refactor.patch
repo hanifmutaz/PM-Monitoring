@@ -1,0 +1,329 @@
+diff --git a/backend/src/services/partService.js b/backend/src/services/partService.js
+index 17a97ff..6641d79 100644
+--- a/backend/src/services/partService.js
++++ b/backend/src/services/partService.js
+@@ -20,9 +20,11 @@ async function createPart(data, userId) {
+       throw AppError.badRequest('Validasi gagal', { line_id: 'Line tidak ditemukan' });
+     }
+ 
+-    const existing = await partQueries.findByLineAndDrawing(data.line_id, data.drawing_no, client);
++    const existing = await partQueries.findByLineJigAndDrawing(data.line_id, data.jig_name, data.drawing_no, client);
+     if (existing) {
+-      throw AppError.badRequest('Validasi gagal', { drawing_no: 'Drawing No sudah dipakai di Line ini' });
++      throw AppError.badRequest('Validasi gagal', {
++        drawing_no: 'Kombinasi Line + Jig + Drawing No ini sudah terdaftar',
++      });
+     }
+ 
+     const created = await partQueries.create(data, client);
+@@ -53,6 +55,7 @@ async function updatePart(id, fields, userId) {
+     }
+ 
+     const targetLineId = fields.line_id !== undefined ? fields.line_id : before.line_id;
++    const targetJigName = fields.jig_name !== undefined ? fields.jig_name : before.jig_name;
+     const targetDrawingNo = fields.drawing_no !== undefined ? fields.drawing_no : before.drawing_no;
+ 
+     if (fields.line_id !== undefined) {
+@@ -62,10 +65,12 @@ async function updatePart(id, fields, userId) {
+       }
+     }
+ 
+-    if (fields.line_id !== undefined || fields.drawing_no !== undefined) {
+-      const existing = await partQueries.findByLineAndDrawing(targetLineId, targetDrawingNo, client);
++    if (fields.line_id !== undefined || fields.jig_name !== undefined || fields.drawing_no !== undefined) {
++      const existing = await partQueries.findByLineJigAndDrawing(targetLineId, targetJigName, targetDrawingNo, client);
+       if (existing && existing.id !== id) {
+-        throw AppError.badRequest('Validasi gagal', { drawing_no: 'Drawing No sudah dipakai di Line ini' });
++        throw AppError.badRequest('Validasi gagal', {
++          drawing_no: 'Kombinasi Line + Jig + Drawing No ini sudah terdaftar',
++        });
+       }
+     }
+ 
+diff --git a/backend/src/services/pmPartService.js b/backend/src/services/pmPartService.js
+index d960856..4279706 100644
+--- a/backend/src/services/pmPartService.js
++++ b/backend/src/services/pmPartService.js
+@@ -53,6 +53,7 @@ function computeMetrics(row, thresholds) {
+     part_id: row.part_id,
+     line_id: row.line_id,
+     line_name: row.line_name,
++    jig_name: row.jig_name,
+     drawing_no: row.drawing_no,
+     part_name: row.part_name,
+     counter,
+diff --git a/backend/src/sql/partQueries.js b/backend/src/sql/partQueries.js
+index b549620..bf0748a 100644
+--- a/backend/src/sql/partQueries.js
++++ b/backend/src/sql/partQueries.js
+@@ -3,7 +3,7 @@ const db = require('../config/db');
+ 
+ const LIST_SELECT = `
+   SELECT
+-    p.id, p.line_id, l.line_name, p.drawing_no, p.part_name, p.target_shot,
++    p.id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name, p.target_shot,
+     p.spare_part_number, p.spare_part_qty, p.spare_part_location, p.spare_part_note,
+     p.is_active,
+     (SELECT COUNT(*)::int FROM part_cl_mapping m WHERE m.part_id = p.id) AS cl_count
+@@ -21,7 +21,9 @@ async function findAll({ lineId, search, page = 1, limit = 20 } = {}, runner = d
+   }
+   if (search) {
+     params.push(`%${search}%`);
+-    conditions.push(`(p.part_name ILIKE $${params.length} OR p.drawing_no ILIKE $${params.length})`);
++    conditions.push(
++      `(p.part_name ILIKE $${params.length} OR p.drawing_no ILIKE $${params.length} OR p.jig_name ILIKE $${params.length})`
++    );
+   }
+ 
+   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+@@ -47,11 +49,11 @@ async function findById(id, runner = db) {
+   return result.rows[0] || null;
+ }
+ 
+-async function findByLineAndDrawing(lineId, drawingNo, runner = db) {
+-  const result = await runner.query(`SELECT id FROM parts WHERE line_id = $1 AND drawing_no = $2`, [
+-    lineId,
+-    drawingNo,
+-  ]);
++async function findByLineJigAndDrawing(lineId, jigName, drawingNo, runner = db) {
++  const result = await runner.query(
++    `SELECT id FROM parts WHERE line_id = $1 AND jig_name = $2 AND drawing_no = $3`,
++    [lineId, jigName, drawingNo]
++  );
+   return result.rows[0] || null;
+ }
+ 
+@@ -62,11 +64,12 @@ async function lineExists(lineId, runner = db) {
+ 
+ async function create(data, runner = db) {
+   const result = await runner.query(
+-    `INSERT INTO parts (line_id, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note)
+-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+-     RETURNING id, line_id, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note, is_active, created_at`,
++    `INSERT INTO parts (line_id, jig_name, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note)
++     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
++     RETURNING id, line_id, jig_name, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note, is_active, created_at`,
+     [
+       data.line_id,
++      data.jig_name,
+       data.drawing_no,
+       data.part_name,
+       data.target_shot,
+@@ -92,7 +95,7 @@ async function update(id, fields, runner = db) {
+ 
+   const result = await runner.query(
+     `UPDATE parts SET ${setClauses.join(', ')} WHERE id = $${params.length}
+-     RETURNING id, line_id, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note, is_active, updated_at`,
++     RETURNING id, line_id, jig_name, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note, is_active, updated_at`,
+     params
+   );
+   return result.rows[0] || null;
+@@ -115,7 +118,7 @@ async function findRawById(id, runner = db) {
+ module.exports = {
+   findAll,
+   findById,
+-  findByLineAndDrawing,
++  findByLineJigAndDrawing,
+   lineExists,
+   create,
+   update,
+diff --git a/backend/src/sql/pmPartHistoryQueries.js b/backend/src/sql/pmPartHistoryQueries.js
+index 40744c3..adaf74e 100644
+--- a/backend/src/sql/pmPartHistoryQueries.js
++++ b/backend/src/sql/pmPartHistoryQueries.js
+@@ -3,7 +3,7 @@ const db = require('../config/db');
+ 
+ const LIST_SELECT = `
+   SELECT
+-    h.id, h.part_id, p.line_id, l.line_name, p.drawing_no, p.part_name,
++    h.id, h.part_id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name,
+     h.tgl_ganti, h.shift, h.counter_saat_diganti, h.jenis_penggantian, h.remark,
+     h.user_id, u.full_name AS user_full_name, h.created_at
+   FROM pm_part_history h
+diff --git a/backend/src/sql/pmPartQueries.js b/backend/src/sql/pmPartQueries.js
+index 67b72cd..f7f30c9 100644
+--- a/backend/src/sql/pmPartQueries.js
++++ b/backend/src/sql/pmPartQueries.js
+@@ -45,7 +45,7 @@ async function findAllWithCounter({ lineId, search, limit, offset } = {}, runner
+   const result = await runner.query(
+     `${COUNTER_CTE}
+      SELECT
+-       p.id AS part_id, p.line_id, l.line_name, p.drawing_no, p.part_name, p.target_shot,
++       p.id AS part_id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name, p.target_shot,
+        COALESCE(pcnt.counter, 0) AS counter,
+        plg.last_tgl_ganti
+      FROM parts p
+@@ -53,7 +53,7 @@ async function findAllWithCounter({ lineId, search, limit, offset } = {}, runner
+      LEFT JOIN part_counter pcnt ON pcnt.part_id = p.id
+      LEFT JOIN part_last_ganti plg ON plg.part_id = p.id
+      ${where}
+-     ORDER BY l.line_name ASC, p.drawing_no ASC
++     ORDER BY l.line_name ASC, p.jig_name ASC, p.drawing_no ASC
+      ${limitOffsetClause}`,
+     params
+   );
+@@ -91,7 +91,7 @@ async function findOneWithCounter(partId, runner = db) {
+   const result = await runner.query(
+     `${COUNTER_CTE}
+      SELECT
+-       p.id AS part_id, p.line_id, l.line_name, p.drawing_no, p.part_name, p.target_shot,
++       p.id AS part_id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name, p.target_shot,
+        COALESCE(pcnt.counter, 0) AS counter,
+        plg.last_tgl_ganti
+      FROM parts p
+diff --git a/backend/src/validators/partValidator.js b/backend/src/validators/partValidator.js
+index 69642cd..f2840e6 100644
+--- a/backend/src/validators/partValidator.js
++++ b/backend/src/validators/partValidator.js
+@@ -6,6 +6,11 @@ function validateCreatePart(body) {
+   if (!body || !Number.isInteger(body.line_id)) {
+     errors.line_id = 'Line ID wajib diisi (integer)';
+   }
++  if (!body || typeof body.jig_name !== 'string' || body.jig_name.trim() === '') {
++    errors.jig_name = 'Jig Name wajib diisi';
++  } else if (body.jig_name.length > 150) {
++    errors.jig_name = 'Jig Name maksimal 150 karakter';
++  }
+   if (!body || typeof body.drawing_no !== 'string' || body.drawing_no.trim() === '') {
+     errors.drawing_no = 'Drawing No wajib diisi';
+   } else if (body.drawing_no.length > 100) {
+@@ -34,6 +39,13 @@ function validateUpdatePart(body) {
+   if (body.line_id !== undefined && !Number.isInteger(body.line_id)) {
+     errors.line_id = 'Line ID harus integer';
+   }
++  if (body.jig_name !== undefined) {
++    if (typeof body.jig_name !== 'string' || body.jig_name.trim() === '') {
++      errors.jig_name = 'Jig Name tidak boleh kosong';
++    } else if (body.jig_name.length > 150) {
++      errors.jig_name = 'Jig Name maksimal 150 karakter';
++    }
++  }
+   if (body.drawing_no !== undefined) {
+     if (typeof body.drawing_no !== 'string' || body.drawing_no.trim() === '') {
+       errors.drawing_no = 'Drawing No tidak boleh kosong';
+diff --git a/frontend/src/components/PmPartHistoryForm.jsx b/frontend/src/components/PmPartHistoryForm.jsx
+index 1c41456..a918f8a 100644
+--- a/frontend/src/components/PmPartHistoryForm.jsx
++++ b/frontend/src/components/PmPartHistoryForm.jsx
+@@ -96,7 +96,7 @@ function PmPartHistoryForm({ onSuccess }) {
+             <option value="">Pilih Part</option>
+             {parts.map((p) => (
+               <option key={p.id} value={p.id}>
+-                {p.drawing_no} — {p.part_name}
++                {p.drawing_no} ({p.jig_name}) — {p.part_name}
+               </option>
+             ))}
+           </select>
+diff --git a/frontend/src/components/masterdata/ClMappingModal.jsx b/frontend/src/components/masterdata/ClMappingModal.jsx
+index 3d79773..2b0789e 100644
+--- a/frontend/src/components/masterdata/ClMappingModal.jsx
++++ b/frontend/src/components/masterdata/ClMappingModal.jsx
+@@ -29,7 +29,7 @@ function ClMappingModal({ part, onClose }) {
+   }
+ 
+   return (
+-    <Modal title={`CL Mapping — ${part.drawing_no}`} onClose={onClose} width={520}>
++    <Modal title={`CL Mapping — ${part.drawing_no} (${part.jig_name})`} onClose={onClose} width={520}>
+       {isLoading ? (
+         <div className="empty-state">Memuat data...</div>
+       ) : (
+diff --git a/frontend/src/components/masterdata/PartsTab.jsx b/frontend/src/components/masterdata/PartsTab.jsx
+index 8cefb59..7e30564 100644
+--- a/frontend/src/components/masterdata/PartsTab.jsx
++++ b/frontend/src/components/masterdata/PartsTab.jsx
+@@ -14,6 +14,7 @@ const LIMIT = 20;
+ 
+ const emptyForm = {
+   line_id: '',
++  jig_name: '',
+   drawing_no: '',
+   part_name: '',
+   target_shot: '',
+@@ -29,6 +30,7 @@ function PartFormModal({ initial, lines, onClose }) {
+     initial
+       ? {
+           line_id: initial.line_id,
++          jig_name: initial.jig_name,
+           drawing_no: initial.drawing_no,
+           part_name: initial.part_name,
+           target_shot: initial.target_shot,
+@@ -48,6 +50,7 @@ function PartFormModal({ initial, lines, onClose }) {
+     setErrors({});
+     const payload = {
+       line_id: Number(form.line_id),
++      jig_name: form.jig_name,
+       drawing_no: form.drawing_no,
+       part_name: form.part_name,
+       target_shot: Number(form.target_shot),
+@@ -89,6 +92,18 @@ function PartFormModal({ initial, lines, onClose }) {
+               ))}
+             </select>
+           </div>
++          <div>
++            <label className="form-label">Jig Name</label>
++            <input
++              className="form-input"
++              style={{ width: '100%' }}
++              value={form.jig_name}
++              onChange={(e) => setForm({ ...form, jig_name: e.target.value })}
++              placeholder="mis. Contact Cutting A"
++              required
++            />
++            {errors.jig_name && <span style={{ color: 'var(--danger)', fontSize: 11 }}>{errors.jig_name}</span>}
++          </div>
+           <div>
+             <label className="form-label">Drawing No</label>
+             <input
+@@ -201,7 +216,7 @@ function PartsTab() {
+   const { remove } = usePartMutations();
+ 
+   async function handleDelete(part) {
+-    if (!confirm(`Hapus Part "${part.drawing_no}"?`)) return;
++    if (!confirm(`Hapus Part "${part.drawing_no}" (Jig: ${part.jig_name})?`)) return;
+     setDeleteError('');
+     try {
+       await remove.mutateAsync(part.id);
+@@ -258,6 +273,7 @@ function PartsTab() {
+             <thead>
+               <tr>
+                 <th>Line</th>
++                <th>Jig</th>
+                 <th>Drawing No / Part Name</th>
+                 <th className="mono">Target Shot</th>
+                 <th className="mono">CL Count</th>
+@@ -269,6 +285,7 @@ function PartsTab() {
+               {data.items.map((part) => (
+                 <tr key={part.id}>
+                   <td className="mono">{part.line_name}</td>
++                  <td className="caption">{part.jig_name}</td>
+                   <td>
+                     <div>{part.part_name}</div>
+                     <div className="caption mono">{part.drawing_no}</div>
+diff --git a/frontend/src/pages/PmPartHistoryPage.jsx b/frontend/src/pages/PmPartHistoryPage.jsx
+index 56c8ca5..8a1dcae 100644
+--- a/frontend/src/pages/PmPartHistoryPage.jsx
++++ b/frontend/src/pages/PmPartHistoryPage.jsx
+@@ -112,7 +112,7 @@ function PmPartHistoryPage() {
+                     <td>
+                       <div className="mono">{item.line_name}</div>
+                       <div className="caption">
+-                        {item.part_name} ({item.drawing_no})
++                        {item.part_name} ({item.drawing_no} — {item.jig_name})
+                       </div>
+                     </td>
+                     <td className="mono">{item.shift || '-'}</td>
+diff --git a/frontend/src/pages/PmPartMonitoringPage.jsx b/frontend/src/pages/PmPartMonitoringPage.jsx
+index 06b9810..8c53653 100644
+--- a/frontend/src/pages/PmPartMonitoringPage.jsx
++++ b/frontend/src/pages/PmPartMonitoringPage.jsx
+@@ -92,7 +92,9 @@ function PmPartMonitoringPage() {
+                     <td className="mono">{item.line_name}</td>
+                     <td>
+                       <div>{item.part_name}</div>
+-                      <div className="caption mono">{item.drawing_no}</div>
++                      <div className="caption mono">
++                        {item.drawing_no} <span className="caption">({item.jig_name})</span>
++                      </div>
+                     </td>
+                     <td className="mono">{item.counter.toLocaleString('id-ID')}</td>
+                     <td className="mono">{item.target_shot.toLocaleString('id-ID')}</td>

@@ -96,7 +96,7 @@ function PmPartHistoryForm({ onSuccess }) {
             <option value="">Pilih Part</option>
             {parts.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.drawing_no} — {p.part_name}
+                {p.drawing_no} ({p.jig_name}) — {p.part_name}
               </option>
             ))}
           </select>

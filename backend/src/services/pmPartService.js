@@ -53,6 +53,7 @@ function computeMetrics(row, thresholds) {
     part_id: row.part_id,
     line_id: row.line_id,
     line_name: row.line_name,
+    jig_name: row.jig_name,
     drawing_no: row.drawing_no,
     part_name: row.part_name,
     counter,

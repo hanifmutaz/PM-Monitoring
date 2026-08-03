@@ -3,7 +3,7 @@ const db = require('../config/db');
 
 const LIST_SELECT = `
   SELECT
-    p.id, p.line_id, l.line_name, p.drawing_no, p.part_name, p.target_shot,
+    p.id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name, p.target_shot,
     p.spare_part_number, p.spare_part_qty, p.spare_part_location, p.spare_part_note,
     p.is_active,
     (SELECT COUNT(*)::int FROM part_cl_mapping m WHERE m.part_id = p.id) AS cl_count
@@ -21,7 +21,9 @@ async function findAll({ lineId, search, page = 1, limit = 20 } = {}, runner = d
   }
   if (search) {
     params.push(`%${search}%`);
-    conditions.push(`(p.part_name ILIKE $${params.length} OR p.drawing_no ILIKE $${params.length})`);
+    conditions.push(
+      `(p.part_name ILIKE $${params.length} OR p.drawing_no ILIKE $${params.length} OR p.jig_name ILIKE $${params.length})`
+    );
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -47,11 +49,11 @@ async function findById(id, runner = db) {
   return result.rows[0] || null;
 }
 
-async function findByLineAndDrawing(lineId, drawingNo, runner = db) {
-  const result = await runner.query(`SELECT id FROM parts WHERE line_id = $1 AND drawing_no = $2`, [
-    lineId,
-    drawingNo,
-  ]);
+async function findByLineJigAndDrawing(lineId, jigName, drawingNo, runner = db) {
+  const result = await runner.query(
+    `SELECT id FROM parts WHERE line_id = $1 AND jig_name = $2 AND drawing_no = $3`,
+    [lineId, jigName, drawingNo]
+  );
   return result.rows[0] || null;
 }
 
@@ -62,11 +64,12 @@ async function lineExists(lineId, runner = db) {
 
 async function create(data, runner = db) {
   const result = await runner.query(
-    `INSERT INTO parts (line_id, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING id, line_id, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note, is_active, created_at`,
+    `INSERT INTO parts (line_id, jig_name, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING id, line_id, jig_name, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note, is_active, created_at`,
     [
       data.line_id,
+      data.jig_name,
       data.drawing_no,
       data.part_name,
       data.target_shot,
@@ -92,7 +95,7 @@ async function update(id, fields, runner = db) {
 
   const result = await runner.query(
     `UPDATE parts SET ${setClauses.join(', ')} WHERE id = $${params.length}
-     RETURNING id, line_id, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note, is_active, updated_at`,
+     RETURNING id, line_id, jig_name, drawing_no, part_name, target_shot, spare_part_number, spare_part_qty, spare_part_location, spare_part_note, is_active, updated_at`,
     params
   );
   return result.rows[0] || null;
@@ -115,7 +118,7 @@ async function findRawById(id, runner = db) {
 module.exports = {
   findAll,
   findById,
-  findByLineAndDrawing,
+  findByLineJigAndDrawing,
   lineExists,
   create,
   update,

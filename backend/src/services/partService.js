@@ -20,9 +20,11 @@ async function createPart(data, userId) {
       throw AppError.badRequest('Validasi gagal', { line_id: 'Line tidak ditemukan' });
     }
 
-    const existing = await partQueries.findByLineAndDrawing(data.line_id, data.drawing_no, client);
+    const existing = await partQueries.findByLineJigAndDrawing(data.line_id, data.jig_name, data.drawing_no, client);
     if (existing) {
-      throw AppError.badRequest('Validasi gagal', { drawing_no: 'Drawing No sudah dipakai di Line ini' });
+      throw AppError.badRequest('Validasi gagal', {
+        drawing_no: 'Kombinasi Line + Jig + Drawing No ini sudah terdaftar',
+      });
     }
 
     const created = await partQueries.create(data, client);
@@ -53,6 +55,7 @@ async function updatePart(id, fields, userId) {
     }
 
     const targetLineId = fields.line_id !== undefined ? fields.line_id : before.line_id;
+    const targetJigName = fields.jig_name !== undefined ? fields.jig_name : before.jig_name;
     const targetDrawingNo = fields.drawing_no !== undefined ? fields.drawing_no : before.drawing_no;
 
     if (fields.line_id !== undefined) {
@@ -62,10 +65,12 @@ async function updatePart(id, fields, userId) {
       }
     }
 
-    if (fields.line_id !== undefined || fields.drawing_no !== undefined) {
-      const existing = await partQueries.findByLineAndDrawing(targetLineId, targetDrawingNo, client);
+    if (fields.line_id !== undefined || fields.jig_name !== undefined || fields.drawing_no !== undefined) {
+      const existing = await partQueries.findByLineJigAndDrawing(targetLineId, targetJigName, targetDrawingNo, client);
       if (existing && existing.id !== id) {
-        throw AppError.badRequest('Validasi gagal', { drawing_no: 'Drawing No sudah dipakai di Line ini' });
+        throw AppError.badRequest('Validasi gagal', {
+          drawing_no: 'Kombinasi Line + Jig + Drawing No ini sudah terdaftar',
+        });
       }
     }
 

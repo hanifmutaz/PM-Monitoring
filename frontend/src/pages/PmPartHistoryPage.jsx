@@ -112,7 +112,7 @@ function PmPartHistoryPage() {
                     <td>
                       <div className="mono">{item.line_name}</div>
                       <div className="caption">
-                        {item.part_name} ({item.drawing_no})
+                        {item.part_name} ({item.drawing_no} — {item.jig_name})
                       </div>
                     </td>
                     <td className="mono">{item.shift || '-'}</td>
