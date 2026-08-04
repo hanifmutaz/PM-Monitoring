@@ -4,6 +4,8 @@ import { Plus, Pencil, Trash2, Link2 } from 'lucide-react';
 import { useParts } from '../../hooks/useParts';
 import { usePartMutations } from '../../hooks/usePartMutations';
 import { useLines } from '../../hooks/useLines';
+import { useInventoryItems } from '../../hooks/useInventoryItems';
+import { useInventoryMutations } from '../../hooks/useInventoryMutations';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import Modal from '../Modal';
 import SearchBar from '../SearchBar';
@@ -193,7 +195,52 @@ function PartFormModal({ initial, lines, onClose }) {
           {pending ? 'Menyimpan...' : 'Simpan'}
         </button>
       </form>
+
+      {isEdit && <InventoryLinkSection part={initial} />}
     </Modal>
+  );
+}
+
+function InventoryLinkSection({ part }) {
+  const { data: inventoryData } = useInventoryItems({ limit: 100 });
+  const { linkPart } = useInventoryMutations();
+  const [selectedId, setSelectedId] = useState(part.inventory_item_id || '');
+  const [error, setError] = useState('');
+
+  async function handleLink() {
+    setError('');
+    try {
+      await linkPart.mutateAsync({ partId: part.id, inventoryItemId: selectedId === '' ? null : Number(selectedId) });
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal link Inventory Item');
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 16, borderTop: '1px solid var(--border-soft)', paddingTop: 12 }}>
+      <div className="caption" style={{ marginBottom: 8 }}>
+        Link ke Inventory Item (stok spare part fisik) — opsional, bisa dishare dengan Part lain kalau spare part-nya
+        identik.
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <select className="form-select" style={{ flex: 1 }} value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
+          <option value="">Tidak di-link</option>
+          {(inventoryData?.items || []).map((inv) => (
+            <option key={inv.id} value={inv.id}>
+              {inv.spare_part_number} — {inv.part_name} (stok: {inv.current_stock})
+            </option>
+          ))}
+        </select>
+        <button type="button" className="btn btn-primary" onClick={handleLink} disabled={linkPart.isPending}>
+          {linkPart.isPending ? 'Menyimpan...' : 'Simpan Link'}
+        </button>
+      </div>
+      {error && (
+        <div className="error-state" style={{ marginTop: 8, padding: 8, fontSize: 12 }}>
+          {error}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -289,6 +336,11 @@ function PartsTab() {
                   <td>
                     <div>{part.part_name}</div>
                     <div className="caption mono">{part.drawing_no}</div>
+                    {part.inventory_item_id && (
+                      <div className="caption" style={{ fontSize: 10 }}>
+                        Stok: {part.inv_spare_part_number} ({part.inv_current_stock})
+                      </div>
+                    )}
                   </td>
                   <td className="mono">{part.target_shot.toLocaleString('id-ID')}</td>
                   <td className="mono">{part.cl_count}</td>

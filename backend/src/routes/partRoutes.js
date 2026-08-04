@@ -26,6 +26,11 @@ router.get('/:partId/cl-mapping', requireRole('Admin', 'Operator'), clMappingCon
 // Part-CL Mapping (nested) - POST: sama seperti POST /parts
 router.post('/:partId/cl-mapping', requireMasterDataEditAccess, clMappingController.create);
 
+// Link/unlink Part ke Inventory Item - dianggap Master Data (konfigurasi
+// relasi, bukan transaksi stok) - sama akses dengan edit Part.
+const inventoryController = require('../controllers/inventoryController');
+router.patch('/:partId/inventory-link', requireMasterDataEditAccess, inventoryController.linkPart);
+
 // NOTE: bulk-import (POST /parts/bulk-import) SENGAJA belum diimplementasikan
 // di Fase 2. Sesuai 03_API_SPECIFICATION.md §4, endpoint ini "dipakai sekali
 // di Fase 2/9 untuk migrasi 1.559 data lama" — akan dibangun di Fase 9

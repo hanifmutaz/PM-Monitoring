@@ -3,10 +3,14 @@ import { useState } from 'react';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import LinesTab from '../components/masterdata/LinesTab';
 import PartsTab from '../components/masterdata/PartsTab';
+import ImportMasterDataTab from '../components/masterdata/ImportMasterDataTab';
+import InventoryTab from '../components/masterdata/InventoryTab';
 
 const TABS = [
   { key: 'lines', label: 'Lines' },
   { key: 'parts', label: 'Parts' },
+  { key: 'import', label: 'Import Excel' },
+  { key: 'inventory', label: 'Inventory' },
 ];
 
 function MasterDataPage() {
@@ -30,6 +34,8 @@ function MasterDataPage() {
 
       {activeTab === 'lines' && <LinesTab />}
       {activeTab === 'parts' && <PartsTab />}
+      {activeTab === 'import' && <ImportMasterDataTab />}
+      {activeTab === 'inventory' && <InventoryTab />}
     </div>
   );
 }

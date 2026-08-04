@@ -5,10 +5,12 @@ const LIST_SELECT = `
   SELECT
     p.id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name, p.target_shot,
     p.spare_part_number, p.spare_part_qty, p.spare_part_location, p.spare_part_note,
+    p.inventory_item_id, inv.spare_part_number AS inv_spare_part_number, inv.current_stock AS inv_current_stock,
     p.is_active,
     (SELECT COUNT(*)::int FROM part_cl_mapping m WHERE m.part_id = p.id) AS cl_count
   FROM parts p
   JOIN lines l ON l.id = p.line_id
+  LEFT JOIN inventory_items inv ON inv.id = p.inventory_item_id
 `;
 
 async function findAll({ lineId, search, page = 1, limit = 20 } = {}, runner = db) {
