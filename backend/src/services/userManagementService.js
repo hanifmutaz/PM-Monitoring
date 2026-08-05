@@ -38,8 +38,8 @@ async function buildUserUpdateDetail({ before, fields, passwordWasReset, client 
   return parts.length ? parts.join('; ') : null;
 }
 
-async function listUsers({ role, isActive }) {
-  return userQueries.findAll({ role, isActive });
+async function listUsers({ role, isActive, status }) {
+  return userQueries.findAll({ role, isActive, status });
 }
 
 async function createUser(data, actorUserId) {
@@ -60,7 +60,7 @@ async function createUser(data, actorUserId) {
     const passwordHash = await bcrypt.hash(data.password, BCRYPT_ROUNDS);
 
     const created = await userQueries.createUser(
-      { username: data.username, passwordHash, fullName: data.full_name, roleId: data.role_id },
+      { username: data.username, passwordHash, fullName: data.full_name, roleId: data.role_id, email: data.email },
       client
     );
 
@@ -142,4 +142,80 @@ async function updateUser(id, fields, actorUserId) {
   }
 }
 
-module.exports = { listUsers, createUser, updateUser };
+async function approveUser(id, roleId, actorUserId) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+
+    const before = await userQueries.findRawById(id, client);
+    if (!before) throw AppError.notFound('User tidak ditemukan');
+    if (before.status !== 'PENDING') {
+      throw AppError.conflict(`User ini sudah berstatus ${before.status}, tidak bisa di-approve lagi`);
+    }
+
+    const roleOk = await userQueries.roleExists(roleId, client);
+    if (!roleOk) throw AppError.badRequest('Validasi gagal', { role_id: 'Role tidak ditemukan' });
+
+    const updated = await userQueries.approveUser(id, roleId, actorUserId, client);
+    const roleName = await userQueries.findRoleNameById(roleId, client);
+
+    await recordAudit(
+      {
+        tableName: 'users',
+        recordId: id,
+        action: 'UPDATE',
+        oldValue: before,
+        newValue: updated,
+        userId: actorUserId,
+        actionDetail: `User di-approve, role di-assign: ${roleName || roleId}`,
+      },
+      client
+    );
+
+    await client.query('COMMIT');
+    return updated;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function rejectUser(id, actorUserId) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+
+    const before = await userQueries.findRawById(id, client);
+    if (!before) throw AppError.notFound('User tidak ditemukan');
+    if (before.status !== 'PENDING') {
+      throw AppError.conflict(`User ini sudah berstatus ${before.status}, tidak bisa di-reject lagi`);
+    }
+
+    const updated = await userQueries.rejectUser(id, actorUserId, client);
+
+    await recordAudit(
+      {
+        tableName: 'users',
+        recordId: id,
+        action: 'UPDATE',
+        oldValue: before,
+        newValue: updated,
+        userId: actorUserId,
+        actionDetail: 'User ditolak (rejected)',
+      },
+      client
+    );
+
+    await client.query('COMMIT');
+    return updated;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { listUsers, createUser, updateUser, approveUser, rejectUser };

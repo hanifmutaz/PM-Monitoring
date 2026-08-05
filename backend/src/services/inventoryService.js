@@ -13,8 +13,81 @@
 
 const db = require('../config/db');
 const inventoryQueries = require('../sql/inventoryQueries');
+const pmPartService = require('./pmPartService');
+const settingsService = require('./settingsService');
 const { recordAudit } = require('../utils/auditLog');
 const AppError = require('../utils/AppError');
+
+/**
+ * Hitung ROP, Safety Stock, Order Qty & Status per Inventory Item.
+ *
+ * RUMUS (Q2/Q3, fix - hasil reverse-engineer dari SparePart.xlsm, lihat
+ * migration 1700000010000):
+ *   Konsumsi Spare/Hari (per Part)  = usage_per_day (Pemakaian/Hari AKTUAL
+ *     dari pmPartService, BUKAN target statis) / target_shot part itu
+ *   Konsumsi Spare/Hari (per Item)  = SUM dari semua Part yang di-link ke
+ *     Item ini (many-to-one - prinsip agregasi penuh, konsisten dengan
+ *     counter cross-CL di seluruh sistem)
+ *   Kebutuhan Spare  = CEIL(Konsumsi Spare/Hari(item) x lead_time_days)
+ *   Safety Stock     = CEIL(safety_stock_percentage% x Kebutuhan Spare)
+ *   ROP              = Kebutuhan Spare + Safety Stock
+ *   Order Qty        = MAX(ROP - current_stock, 0)
+ *   Status           = current_stock <= ROP ? 'ORDER' : 'OK'
+ *
+ * Item dengan lead_time_days = NULL (belum diisi Admin) atau tidak punya
+ * Part yang di-link -> ROP tidak bisa dihitung, dikembalikan null dengan
+ * status 'NOT_CONFIGURED' (BUKAN 'OK' - supaya tidak salah dikira aman).
+ */
+async function getRopMetrics() {
+  const safetyStockPct = Number(await settingsService.getSetting('inventory_safety_stock_percentage')) || 20;
+
+  const { items: allItems } = await inventoryQueries.findAllItems({ limit: 100000 });
+  const allPartMetrics = await pmPartService.getAllComputedMetrics({});
+  const usageByPartId = new Map(allPartMetrics.map((p) => [p.part_id, p]));
+
+  const results = [];
+  for (const item of allItems) {
+    const linkedParts = await inventoryQueries.findPartsByInventoryItem(item.id);
+
+    if (linkedParts.length === 0 || item.lead_time_days === null || item.lead_time_days === undefined) {
+      results.push({
+        ...item,
+        konsumsi_spare_per_hari: null,
+        kebutuhan_spare: null,
+        safety_stock: null,
+        rop: null,
+        order_qty: null,
+        status: 'NOT_CONFIGURED',
+      });
+      continue;
+    }
+
+    let konsumsiSpareHari = 0;
+    for (const linkedPart of linkedParts) {
+      const metric = usageByPartId.get(linkedPart.id);
+      if (!metric || !metric.target_shot) continue;
+      konsumsiSpareHari += metric.usage_per_day / metric.target_shot;
+    }
+
+    const kebutuhanSpare = Math.ceil(konsumsiSpareHari * item.lead_time_days);
+    const safetyStock = Math.ceil((safetyStockPct / 100) * kebutuhanSpare);
+    const rop = kebutuhanSpare + safetyStock;
+    const orderQty = Math.max(rop - item.current_stock, 0);
+    const status = item.current_stock <= rop ? 'ORDER' : 'OK';
+
+    results.push({
+      ...item,
+      konsumsi_spare_per_hari: Math.round(konsumsiSpareHari * 10000) / 10000,
+      kebutuhan_spare: kebutuhanSpare,
+      safety_stock: safetyStock,
+      rop,
+      order_qty: orderQty,
+      status,
+    });
+  }
+
+  return results;
+}
 
 async function listItems({ search, page, limit }) {
   return inventoryQueries.findAllItems({ search, page, limit });
@@ -55,6 +128,7 @@ async function createItem(data, userId) {
         part_name: data.part_name,
         location: data.location,
         note: data.note,
+        lead_time_days: data.lead_time_days === undefined || data.lead_time_days === '' ? null : Number(data.lead_time_days),
       },
       client
     );
@@ -282,4 +356,5 @@ module.exports = {
   adjustStock,
   deleteItem,
   linkPartToItem,
+  getRopMetrics,
 };

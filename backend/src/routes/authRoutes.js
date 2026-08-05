@@ -8,6 +8,7 @@ const router = express.Router();
 
 // Public
 router.post('/login', loginRateLimiter, authController.login);
+router.post('/register', loginRateLimiter, authController.register);
 
 // Semua user login
 router.post('/logout', requireAuth, authController.logout);

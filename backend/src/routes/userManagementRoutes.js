@@ -11,5 +11,7 @@ router.use(requireAuth, requireRole('Admin'));
 router.get('/', userManagementController.list);
 router.post('/', userManagementController.create);
 router.patch('/:id', userManagementController.update);
+router.post('/:id/approve', userManagementController.approve);
+router.post('/:id/reject', userManagementController.reject);
 
 module.exports = router;

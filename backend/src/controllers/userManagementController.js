@@ -5,10 +5,11 @@ const asyncHandler = require('../utils/asyncHandler');
 const AppError = require('../utils/AppError');
 
 const list = asyncHandler(async (req, res) => {
-  const { role, is_active } = req.query;
+  const { role, is_active, status } = req.query;
   const data = await userManagementService.listUsers({
     role,
     isActive: is_active === undefined ? undefined : is_active === 'true',
+    status,
   });
   res.status(200).json({ success: true, message: 'Success', data });
 });
@@ -33,4 +34,18 @@ const update = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Success', data });
 });
 
-module.exports = { list, create, update };
+const approve = asyncHandler(async (req, res) => {
+  const roleId = Number(req.body.role_id);
+  if (!Number.isInteger(roleId)) {
+    throw AppError.badRequest('Validasi gagal', { role_id: 'Role ID wajib diisi (integer) saat approve' });
+  }
+  const data = await userManagementService.approveUser(Number(req.params.id), roleId, req.user.id);
+  res.status(200).json({ success: true, message: 'Success', data });
+});
+
+const reject = asyncHandler(async (req, res) => {
+  const data = await userManagementService.rejectUser(Number(req.params.id), req.user.id);
+  res.status(200).json({ success: true, message: 'Success', data });
+});
+
+module.exports = { list, create, update, approve, reject };

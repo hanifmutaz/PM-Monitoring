@@ -27,6 +27,14 @@ function validateCreateUser(body) {
     errors.role_id = 'Role ID wajib diisi (integer)';
   }
 
+  if (body && body.email !== undefined && body.email !== null && body.email !== '') {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+      errors.email = 'Format email tidak valid';
+    } else if (body.email.length > 150) {
+      errors.email = 'Email maksimal 150 karakter';
+    }
+  }
+
   return { valid: Object.keys(errors).length === 0, errors };
 }
 
@@ -60,6 +68,13 @@ function validateUpdateUser(body) {
   }
   if (body.is_active !== undefined && typeof body.is_active !== 'boolean') {
     errors.is_active = 'Harus boolean';
+  }
+  if (body.email !== undefined && body.email !== null && body.email !== '') {
+    if (typeof body.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) {
+      errors.email = 'Format email tidak valid';
+    } else if (body.email.length > 150) {
+      errors.email = 'Email maksimal 150 karakter';
+    }
   }
   if (Object.keys(body || {}).length === 0) {
     errors._general = 'Tidak ada field yang diubah';

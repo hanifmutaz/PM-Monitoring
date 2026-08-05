@@ -1,6 +1,6 @@
 // src/pages/LoginPage.jsx
 import { useState } from 'react';
-import { useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 function LoginPage() {
@@ -88,6 +88,12 @@ function LoginPage() {
         <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={submitting}>
           {submitting ? 'Memproses...' : 'Login'}
         </button>
+
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
+          <Link to="/register" className="caption">
+            Belum punya akun? Daftar di sini
+          </Link>
+        </div>
       </form>
     </div>
   );

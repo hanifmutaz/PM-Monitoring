@@ -3,7 +3,7 @@ const db = require('../config/db');
 
 const ITEM_SELECT = `
   SELECT
-    i.id, i.spare_part_number, i.part_name, i.location, i.note, i.current_stock,
+    i.id, i.spare_part_number, i.part_name, i.location, i.note, i.current_stock, i.lead_time_days,
     i.is_active, i.created_at, i.updated_at,
     (SELECT COUNT(*)::int FROM parts p WHERE p.inventory_item_id = i.id) AS linked_part_count
   FROM inventory_items i
@@ -46,12 +46,12 @@ async function findItemBySparePartNumber(sparePartNumber, runner = db) {
   return result.rows[0] || null;
 }
 
-async function createItem({ spare_part_number, part_name, location, note }, runner = db) {
+async function createItem({ spare_part_number, part_name, location, note, lead_time_days }, runner = db) {
   const result = await runner.query(
-    `INSERT INTO inventory_items (spare_part_number, part_name, location, note, current_stock)
-     VALUES ($1, $2, $3, $4, 0)
-     RETURNING id, spare_part_number, part_name, location, note, current_stock, is_active, created_at, updated_at`,
-    [spare_part_number, part_name, location ?? null, note ?? null]
+    `INSERT INTO inventory_items (spare_part_number, part_name, location, note, lead_time_days, current_stock)
+     VALUES ($1, $2, $3, $4, $5, 0)
+     RETURNING id, spare_part_number, part_name, location, note, lead_time_days, current_stock, is_active, created_at, updated_at`,
+    [spare_part_number, part_name, location ?? null, note ?? null, lead_time_days ?? null]
   );
   return result.rows[0];
 }
@@ -69,7 +69,7 @@ async function updateItem(id, fields, runner = db) {
 
   const result = await runner.query(
     `UPDATE inventory_items SET ${setClauses.join(', ')} WHERE id = $${params.length}
-     RETURNING id, spare_part_number, part_name, location, note, current_stock, is_active, created_at, updated_at`,
+     RETURNING id, spare_part_number, part_name, location, note, lead_time_days, current_stock, is_active, created_at, updated_at`,
     params
   );
   return result.rows[0] || null;
@@ -79,7 +79,7 @@ async function adjustCurrentStock(id, delta, runner = db) {
   const result = await runner.query(
     `UPDATE inventory_items SET current_stock = current_stock + $1, updated_at = now()
      WHERE id = $2
-     RETURNING id, spare_part_number, part_name, location, note, current_stock, is_active, created_at, updated_at`,
+     RETURNING id, spare_part_number, part_name, location, note, lead_time_days, current_stock, is_active, created_at, updated_at`,
     [delta, id]
   );
   return result.rows[0] || null;

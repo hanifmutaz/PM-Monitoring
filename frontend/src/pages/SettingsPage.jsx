@@ -1,11 +1,12 @@
 // src/pages/SettingsPage.jsx
 import { useState } from 'react';
-import { Sliders, Award, CalendarClock, Repeat, RefreshCw, LayoutGrid, Users } from 'lucide-react';
+import { Sliders, Award, CalendarClock, Repeat, RefreshCw, LayoutGrid, Users, Mail, Package } from 'lucide-react';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { useSettings, useUpdateSetting } from '../hooks/useSettings';
 import ToggleSwitch from '../components/ToggleSwitch';
 
 // Urutan & metadata 7 kategori sesuai MASTER DOCUMENT Bagian 4
+// + kategori 'notifikasi' dan 'inventory' (ditambah belakangan)
 const CATEGORY_META = {
   threshold_pm_part: { no: 1, title: 'Threshold PM Part', icon: Sliders },
   skema_poin_monthly: { no: 2, title: 'Skema Poin PM Monthly', icon: Award },
@@ -14,6 +15,8 @@ const CATEGORY_META = {
   sync_data_produksi: { no: 5, title: 'Sync Data Produksi', icon: RefreshCw },
   dashboard_tampilan: { no: 6, title: 'Dashboard & Tampilan', icon: LayoutGrid },
   user_role: { no: 7, title: 'User & Role', icon: Users },
+  notifikasi: { no: 8, title: 'Notifikasi Email', icon: Mail },
+  inventory: { no: 9, title: 'Inventory (ROP & Safety Stock)', icon: Package },
 };
 
 function SettingRow({ setting }) {

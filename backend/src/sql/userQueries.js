@@ -12,10 +12,10 @@ const db = require('../config/db');
  */
 async function findByUsernameAnyStatus(username) {
   const result = await db.query(
-    `SELECT u.id, u.username, u.password_hash, u.full_name, u.is_active,
+    `SELECT u.id, u.username, u.password_hash, u.full_name, u.is_active, u.status,
             r.id AS role_id, r.name AS role_name
      FROM users u
-     JOIN roles r ON r.id = u.role_id
+     LEFT JOIN roles r ON r.id = u.role_id
      WHERE u.username = $1`,
     [username]
   );
@@ -42,10 +42,10 @@ async function findActiveUserByUsername(username) {
  */
 async function findUserById(id) {
   const result = await db.query(
-    `SELECT u.id, u.username, u.full_name, u.is_active,
+    `SELECT u.id, u.username, u.full_name, u.is_active, u.status,
             r.id AS role_id, r.name AS role_name
      FROM users u
-     JOIN roles r ON r.id = u.role_id
+     LEFT JOIN roles r ON r.id = u.role_id
      WHERE u.id = $1`,
     [id]
   );
@@ -64,7 +64,7 @@ async function updateLastLogin(id) {
  * password_hash sama sekali di SELECT (Development Rules - password
  * gak boleh bocor lewat endpoint manapun selain proses login internal).
  */
-async function findAll({ role, isActive } = {}, runner = db) {
+async function findAll({ role, isActive, status } = {}, runner = db) {
   const conditions = [];
   const params = [];
 
@@ -76,14 +76,18 @@ async function findAll({ role, isActive } = {}, runner = db) {
     params.push(isActive);
     conditions.push(`u.is_active = $${params.length}`);
   }
+  if (status) {
+    params.push(status);
+    conditions.push(`u.status = $${params.length}`);
+  }
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const result = await runner.query(
-    `SELECT u.id, u.username, u.full_name, r.id AS role_id, r.name AS role,
-            u.is_active, u.last_login, u.created_at
+    `SELECT u.id, u.username, u.full_name, u.email, r.id AS role_id, r.name AS role,
+            u.is_active, u.status, u.last_login, u.created_at
      FROM users u
-     JOIN roles r ON r.id = u.role_id
+     LEFT JOIN roles r ON r.id = u.role_id
      ${where}
      ORDER BY u.username ASC`,
     params
@@ -96,7 +100,8 @@ async function findAll({ role, isActive } = {}, runner = db) {
  */
 async function findRawById(id, runner = db) {
   const result = await runner.query(
-    `SELECT u.id, u.username, u.full_name, u.role_id, u.is_active, u.last_login, u.created_at, u.updated_at
+    `SELECT u.id, u.username, u.full_name, u.email, u.role_id, u.is_active, u.status,
+            u.approved_by, u.approved_at, u.last_login, u.created_at, u.updated_at
      FROM users u WHERE u.id = $1`,
     [id]
   );
@@ -123,14 +128,38 @@ async function findRoleNameById(roleId, runner = db) {
   return result.rows[0] ? result.rows[0].name : null;
 }
 
-async function createUser({ username, passwordHash, fullName, roleId }, runner = db) {
+async function createUser({ username, passwordHash, fullName, roleId, email, status }, runner = db) {
   const result = await runner.query(
-    `INSERT INTO users (username, password_hash, role_id, full_name, is_active)
-     VALUES ($1, $2, $3, $4, TRUE)
-     RETURNING id, username, full_name, role_id, is_active, created_at`,
-    [username, passwordHash, roleId, fullName]
+    `INSERT INTO users (username, password_hash, role_id, full_name, email, status, is_active)
+     VALUES ($1, $2, $3, $4, $5, $6, TRUE)
+     RETURNING id, username, full_name, email, role_id, status, is_active, created_at`,
+    [username, passwordHash, roleId ?? null, fullName, email ?? null, status || 'APPROVED']
   );
   return result.rows[0];
+}
+
+/**
+ * Approve user PENDING -> APPROVED, sekaligus assign role (Admin pilih
+ * role-nya saat approve, karena user self-register belum py role_id).
+ */
+async function approveUser(id, roleId, approvedBy, runner = db) {
+  const result = await runner.query(
+    `UPDATE users SET status = 'APPROVED', role_id = $1, approved_by = $2, approved_at = now(), updated_at = now()
+     WHERE id = $3
+     RETURNING id, username, full_name, email, role_id, status, is_active, approved_by, approved_at, updated_at`,
+    [roleId, approvedBy, id]
+  );
+  return result.rows[0] || null;
+}
+
+async function rejectUser(id, approvedBy, runner = db) {
+  const result = await runner.query(
+    `UPDATE users SET status = 'REJECTED', approved_by = $1, approved_at = now(), updated_at = now()
+     WHERE id = $2
+     RETURNING id, username, full_name, email, role_id, status, is_active, approved_by, approved_at, updated_at`,
+    [approvedBy, id]
+  );
+  return result.rows[0] || null;
 }
 
 /**
@@ -150,10 +179,27 @@ async function updateUser(id, fields, runner = db) {
 
   const result = await runner.query(
     `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${params.length}
-     RETURNING id, username, full_name, role_id, is_active, updated_at`,
+     RETURNING id, username, full_name, email, role_id, is_active, updated_at`,
     params
   );
   return result.rows[0] || null;
+}
+
+/**
+ * Ambil email user aktif berdasarkan daftar nama role. Dipakai
+ * notificationService buat resolve penerima email notifikasi. User tanpa
+ * email (NULL/kosong) otomatis TIDAK ikut - lihat filter di WHERE.
+ */
+async function findActiveEmailsByRoles(roleNames, runner = db) {
+  if (!roleNames || roleNames.length === 0) return [];
+  const result = await runner.query(
+    `SELECT u.email
+     FROM users u
+     JOIN roles r ON r.id = u.role_id
+     WHERE r.name = ANY($1) AND u.is_active = TRUE AND u.email IS NOT NULL AND u.email <> ''`,
+    [roleNames]
+  );
+  return result.rows.map((r) => r.email);
 }
 
 module.exports = {
@@ -168,4 +214,7 @@ module.exports = {
   findRoleNameById,
   createUser,
   updateUser,
+  findActiveEmailsByRoles,
+  approveUser,
+  rejectUser,
 };

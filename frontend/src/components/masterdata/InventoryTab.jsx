@@ -1,7 +1,7 @@
 // src/components/masterdata/InventoryTab.jsx
 import { useState } from 'react';
 import { Plus, Pencil, Trash2, History, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
-import { useInventoryItems } from '../../hooks/useInventoryItems';
+import { useInventoryItems, useInventoryRopStatus } from '../../hooks/useInventoryItems';
 import { useInventoryItemDetail, useInventoryMovements } from '../../hooks/useInventoryItemDetail';
 import { useInventoryMutations } from '../../hooks/useInventoryMutations';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -11,7 +11,7 @@ import Pagination from '../Pagination';
 
 const LIMIT = 20;
 
-const emptyForm = { spare_part_number: '', part_name: '', location: '', note: '', initial_stock: '' };
+const emptyForm = { spare_part_number: '', part_name: '', location: '', note: '', lead_time_days: '', initial_stock: '' };
 
 function ItemFormModal({ initial, onClose }) {
   const isEdit = !!initial;
@@ -22,6 +22,7 @@ function ItemFormModal({ initial, onClose }) {
           part_name: initial.part_name,
           location: initial.location || '',
           note: initial.note || '',
+          lead_time_days: initial.lead_time_days ?? '',
         }
       : emptyForm
   );
@@ -37,6 +38,7 @@ function ItemFormModal({ initial, onClose }) {
       part_name: form.part_name,
       location: form.location || undefined,
       note: form.note || undefined,
+      lead_time_days: form.lead_time_days === '' ? undefined : Number(form.lead_time_days),
       ...(isEdit ? {} : { initial_stock: form.initial_stock === '' ? 0 : Number(form.initial_stock) }),
     };
     try {
@@ -87,6 +89,24 @@ function ItemFormModal({ initial, onClose }) {
               value={form.location}
               onChange={(e) => setForm({ ...form, location: e.target.value })}
             />
+          </div>
+          <div>
+            <label className="form-label">Lead Time (hari)</label>
+            <input
+              type="number"
+              className="form-input mono"
+              style={{ width: '100%', textAlign: 'right' }}
+              value={form.lead_time_days}
+              min={0}
+              onChange={(e) => setForm({ ...form, lead_time_days: e.target.value })}
+              placeholder="mis. 14"
+            />
+            {errors.lead_time_days && (
+              <span style={{ color: 'var(--danger)', fontSize: 11 }}>{errors.lead_time_days}</span>
+            )}
+            <div className="caption" style={{ fontSize: 10 }}>
+              Wajib diisi supaya ROP bisa dihitung. Beda-beda per supplier (lokal vs import).
+            </div>
           </div>
           {!isEdit && (
             <div>
@@ -191,12 +211,15 @@ function AdjustStockForm({ item, onDone }) {
 function ItemDetailModal({ itemId, onClose }) {
   const { data: item } = useInventoryItemDetail(itemId);
   const { data: movementData } = useInventoryMovements(itemId, { page: 1, limit: 20 });
+  const { data: ropData } = useInventoryRopStatus();
 
   if (!item) return null;
 
+  const rop = (ropData || []).find((r) => r.id === itemId);
+
   return (
     <Modal title={`${item.spare_part_number} — ${item.part_name}`} onClose={onClose} width={620}>
-      <div style={{ display: 'flex', gap: 20, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
         <div>
           <div className="caption">Stok Saat Ini</div>
           <div style={{ fontSize: 22, fontWeight: 700 }}>{item.current_stock.toLocaleString('id-ID')}</div>
@@ -206,10 +229,57 @@ function ItemDetailModal({ itemId, onClose }) {
           <div>{item.location || '-'}</div>
         </div>
         <div>
+          <div className="caption">Lead Time</div>
+          <div>{item.lead_time_days !== null ? `${item.lead_time_days} hari` : 'Belum diisi'}</div>
+        </div>
+        <div>
           <div className="caption">Dipakai oleh Part</div>
           <div>{item.linked_parts?.length || 0} part</div>
         </div>
       </div>
+
+      {rop && rop.status !== 'NOT_CONFIGURED' ? (
+        <div
+          style={{
+            marginBottom: 16,
+            padding: 10,
+            borderRadius: 8,
+            border: '1px solid var(--border-soft)',
+            display: 'flex',
+            gap: 20,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div>
+            <div className="caption">Konsumsi/Hari</div>
+            <div className="mono">{rop.konsumsi_spare_per_hari}</div>
+          </div>
+          <div>
+            <div className="caption">Kebutuhan Spare</div>
+            <div className="mono">{rop.kebutuhan_spare}</div>
+          </div>
+          <div>
+            <div className="caption">Safety Stock</div>
+            <div className="mono">{rop.safety_stock}</div>
+          </div>
+          <div>
+            <div className="caption">ROP</div>
+            <div className="mono" style={{ fontWeight: 700 }}>
+              {rop.rop}
+            </div>
+          </div>
+          <div>
+            <div className="caption">Status</div>
+            <div style={{ color: rop.status === 'ORDER' ? 'var(--danger)' : 'var(--success, #2e7d32)' }}>
+              {rop.status === 'ORDER' ? `🛒 Order (${rop.order_qty})` : '✅ OK'}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="caption" style={{ marginBottom: 16, fontStyle: 'italic' }}>
+          ROP belum bisa dihitung - isi Lead Time dan pastikan item ini sudah di-link ke minimal 1 Part.
+        </div>
+      )}
 
       {item.linked_parts?.length > 0 && (
         <div style={{ marginBottom: 16 }}>
@@ -291,7 +361,10 @@ function InventoryTab() {
 
   const debouncedSearch = useDebouncedValue(search);
   const { data, isLoading } = useInventoryItems({ search: debouncedSearch || undefined, page, limit: LIMIT });
+  const { data: ropData } = useInventoryRopStatus();
   const { remove } = useInventoryMutations();
+
+  const ropById = new Map((ropData || []).map((r) => [r.id, r]));
 
   async function handleDelete(item) {
     if (!confirm(`Hapus Inventory Item "${item.spare_part_number}"?`)) return;
@@ -341,49 +414,66 @@ function InventoryTab() {
                 <th>Spare Part Number / Nama</th>
                 <th>Lokasi</th>
                 <th className="mono">Stok</th>
+                <th className="mono">ROP</th>
+                <th>Status</th>
                 <th className="mono">Dipakai Part</th>
                 <th style={{ width: 130 }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
-              {data.items.map((item) => (
-                <tr key={item.id}>
-                  <td>
-                    <div className="mono">{item.spare_part_number}</div>
-                    <div className="caption">{item.part_name}</div>
-                  </td>
-                  <td className="caption">{item.location || '-'}</td>
-                  <td className="mono">{item.current_stock.toLocaleString('id-ID')}</td>
-                  <td className="mono">{item.linked_part_count}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="btn-secondary btn"
-                      style={{ padding: 6, marginRight: 4 }}
-                      title="Detail & Mutasi Stok"
-                      onClick={() => setDetailItemId(item.id)}
-                    >
-                      <History size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-secondary btn"
-                      style={{ padding: 6, marginRight: 4 }}
-                      onClick={() => setModalState({ mode: 'edit', item })}
-                    >
-                      <Pencil size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-secondary btn"
-                      style={{ padding: 6 }}
-                      onClick={() => handleDelete(item)}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {data.items.map((item) => {
+                const rop = ropById.get(item.id);
+                return (
+                  <tr key={item.id}>
+                    <td>
+                      <div className="mono">{item.spare_part_number}</div>
+                      <div className="caption">{item.part_name}</div>
+                    </td>
+                    <td className="caption">{item.location || '-'}</td>
+                    <td className="mono">{item.current_stock.toLocaleString('id-ID')}</td>
+                    <td className="mono">{rop?.rop ?? '-'}</td>
+                    <td>
+                      {!rop || rop.status === 'NOT_CONFIGURED' ? (
+                        <span className="caption" style={{ color: 'var(--warning, #b8860b)' }}>
+                          Belum lengkap
+                        </span>
+                      ) : rop.status === 'ORDER' ? (
+                        <span style={{ color: 'var(--danger)' }}>🛒 Order ({rop.order_qty})</span>
+                      ) : (
+                        <span style={{ color: 'var(--success, #2e7d32)' }}>✅ OK</span>
+                      )}
+                    </td>
+                    <td className="mono">{item.linked_part_count}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn-secondary btn"
+                        style={{ padding: 6, marginRight: 4 }}
+                        title="Detail & Mutasi Stok"
+                        onClick={() => setDetailItemId(item.id)}
+                      >
+                        <History size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary btn"
+                        style={{ padding: 6, marginRight: 4 }}
+                        onClick={() => setModalState({ mode: 'edit', item })}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary btn"
+                        style={{ padding: 6 }}
+                        onClick={() => handleDelete(item)}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <Pagination page={data.page} limit={data.limit} total={data.total} onPageChange={setPage} />

@@ -10,6 +10,7 @@ router.use(requireAuth);
 
 // GET - Admin & Operator (sama seperti akses baca Master Data lain)
 router.get('/', requireRole('Admin', 'Operator'), inventoryController.list);
+router.get('/rop-status', requireRole('Admin', 'Operator'), inventoryController.ropStatus);
 router.get('/:id', requireRole('Admin', 'Operator'), inventoryController.detail);
 router.get('/:id/movements', requireRole('Admin', 'Operator'), inventoryController.movements);
 

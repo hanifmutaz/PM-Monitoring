@@ -1,6 +1,6 @@
 // src/controllers/authController.js
 const authService = require('../services/authService');
-const { validateLoginBody } = require('../validators/authValidator');
+const { validateLoginBody, validateRegisterBody } = require('../validators/authValidator');
 const asyncHandler = require('../utils/asyncHandler');
 const AppError = require('../utils/AppError');
 const env = require('../config/env');
@@ -36,6 +36,24 @@ const login = asyncHandler(async (req, res) => {
   });
 });
 
+const register = asyncHandler(async (req, res) => {
+  const { valid, errors } = validateRegisterBody(req.body);
+  if (!valid) {
+    throw AppError.badRequest('Validasi gagal', errors);
+  }
+
+  const { username, password, full_name, email } = req.body;
+  const created = await authService.register({ username, password, full_name, email });
+
+  // TIDAK ada cookie/token di sini dengan sengaja - status masih PENDING,
+  // belum boleh login sampai Admin approve.
+  res.status(201).json({
+    success: true,
+    message: 'Registrasi berhasil. Akun Anda menunggu persetujuan Admin sebelum bisa login.',
+    data: { id: created.id, username: created.username, status: created.status },
+  });
+});
+
 const logout = asyncHandler(async (req, res) => {
   const context = { ip: req.ip, userAgent: req.get('user-agent') };
   await authService.logout(req.user.username, req.user.id, context);
@@ -48,4 +66,4 @@ const me = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Success', data: user });
 });
 
-module.exports = { login, logout, me };
+module.exports = { login, register, logout, me };

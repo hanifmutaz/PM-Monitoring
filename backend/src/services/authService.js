@@ -1,10 +1,14 @@
 // src/services/authService.js
 const bcrypt = require('bcrypt');
+const db = require('../config/db');
 const userQueries = require('../sql/userQueries');
 const loginAuditQueries = require('../sql/loginAuditQueries');
 const { signToken } = require('../utils/jwt');
+const { validatePassword } = require('../utils/passwordPolicy');
 const AppError = require('../utils/AppError');
 const logger = require('../utils/logger');
+
+const BCRYPT_ROUNDS = 10;
 
 async function logLoginEvent(eventType, usernameAttempted, userId, context = {}) {
   try {
@@ -38,6 +42,20 @@ async function login(username, password, context = {}) {
     throw AppError.badRequest('Username atau password salah');
   }
 
+  // Status PENDING/REJECTED di-block TOTAL - dicek SEBELUM password
+  // diverifikasi (tidak perlu bcrypt.compare kalau akun memang belum/tidak
+  // boleh login). Pesan ke CLIENT tetap generik, konsisten dengan pola
+  // LOGIN_FAILED_ACCOUNT_DISABLED di atas - tidak membocorkan status akun
+  // ke siapa pun yang menebak username orang lain.
+  if (user.status === 'PENDING') {
+    await logLoginEvent('LOGIN_FAILED_PENDING_APPROVAL', username, user.id, context);
+    throw AppError.badRequest('Username atau password salah');
+  }
+  if (user.status === 'REJECTED') {
+    await logLoginEvent('LOGIN_FAILED_REJECTED', username, user.id, context);
+    throw AppError.badRequest('Username atau password salah');
+  }
+
   const passwordMatch = await bcrypt.compare(password, user.password_hash);
   if (!passwordMatch) {
     await logLoginEvent('LOGIN_FAILED_INVALID_PASSWORD', username, user.id, context);
@@ -57,6 +75,44 @@ async function login(username, password, context = {}) {
   const token = signToken(userPayload);
 
   return { token, user: userPayload };
+}
+
+/**
+ * Self-registration (Q1-Q11 diskusi User Approval): akun baru dibuat dengan
+ * status PENDING & role_id NULL - TIDAK langsung bisa login, TIDAK dapat
+ * token. Harus di-approve Admin dulu (assign role) lewat User Management
+ * sebelum bisa login normal.
+ */
+async function register({ username, password, full_name, email }) {
+  const { valid, error } = validatePassword(password, username);
+  if (!valid) {
+    throw AppError.badRequest('Validasi gagal', { password: error });
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+
+    const exists = await userQueries.usernameExists(username, client);
+    if (exists) {
+      throw AppError.badRequest('Validasi gagal', { username: 'Username sudah dipakai' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+    const created = await userQueries.createUser(
+      { username, passwordHash, fullName: full_name, roleId: null, email, status: 'PENDING' },
+      client
+    );
+
+    await client.query('COMMIT');
+    return created;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -84,4 +140,4 @@ async function getMe(userId) {
   };
 }
 
-module.exports = { login, logout, getMe };
+module.exports = { login, register, logout, getMe };

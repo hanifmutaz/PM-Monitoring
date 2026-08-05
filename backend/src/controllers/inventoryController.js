@@ -64,4 +64,9 @@ const linkPart = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Success', data });
 });
 
-module.exports = { list, detail, movements, create, update, adjustStock, remove, linkPart };
+const ropStatus = asyncHandler(async (req, res) => {
+  const data = await inventoryService.getRopMetrics();
+  res.status(200).json({ success: true, message: 'Success', data });
+});
+
+module.exports = { list, detail, movements, create, update, adjustStock, remove, linkPart, ropStatus };

@@ -6,6 +6,11 @@ export async function fetchInventoryItems(params) {
   return data.data; // { items, total, page, limit }
 }
 
+export async function fetchInventoryRopStatus() {
+  const { data } = await apiClient.get('/inventory/rop-status');
+  return data.data; // array item + konsumsi_spare_per_hari, kebutuhan_spare, safety_stock, rop, order_qty, status
+}
+
 export async function fetchInventoryItem(id) {
   const { data } = await apiClient.get(`/inventory/${id}`);
   return data.data;

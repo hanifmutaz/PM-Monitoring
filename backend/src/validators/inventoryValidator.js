@@ -19,6 +19,12 @@ function validateCreateItem(body) {
       errors.initial_stock = 'Stok awal harus angka bulat >= 0';
     }
   }
+  if (body && body.lead_time_days !== undefined && body.lead_time_days !== null && body.lead_time_days !== '') {
+    const n = Number(body.lead_time_days);
+    if (!Number.isInteger(n) || n < 0) {
+      errors.lead_time_days = 'Lead Time harus angka bulat (hari) >= 0';
+    }
+  }
   return { valid: Object.keys(errors).length === 0, errors };
 }
 
@@ -34,6 +40,12 @@ function validateUpdateItem(body) {
   if (body.part_name !== undefined) {
     if (typeof body.part_name !== 'string' || body.part_name.trim() === '') {
       errors.part_name = 'Part Name tidak boleh kosong';
+    }
+  }
+  if (body.lead_time_days !== undefined && body.lead_time_days !== null && body.lead_time_days !== '') {
+    const n = Number(body.lead_time_days);
+    if (!Number.isInteger(n) || n < 0) {
+      errors.lead_time_days = 'Lead Time harus angka bulat (hari) >= 0';
     }
   }
   return { valid: Object.keys(errors).length === 0, errors };

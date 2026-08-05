@@ -34,6 +34,19 @@ module.exports = {
     expiresIn: process.env.JWT_EXPIRES_IN || '8h',
   },
 
+  // Kredensial SMTP TIDAK di-require saat startup (§REQUIRED_VARS) - sama
+  // filosofi dengan ConMas: app tetap jalan walau SMTP belum dikonfigurasi.
+  // notificationService yang handle kalau config ini kosong (log warning,
+  // skip pengiriman) - bukan bikin seluruh app crash.
+  smtp: {
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT, 10) || 587,
+    secure: process.env.SMTP_SECURE === 'true',
+    user: process.env.SMTP_USER,
+    password: process.env.SMTP_PASSWORD,
+    from: process.env.SMTP_FROM || 'PM Monitoring <no-reply@hirose.local>',
+  },
+
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
 
   logLevel: process.env.LOG_LEVEL || 'info',
