@@ -2,13 +2,16 @@
 const express = require('express');
 const pmLineHistoryController = require('../controllers/pmLineHistoryController');
 const requireAuth = require('../middlewares/authMiddleware');
-const requireRole = require('../middlewares/roleMiddleware');
+const requirePermission = require('../middlewares/permissionMiddleware');
 
 const router = express.Router();
+router.use(requireAuth);
 
-router.use(requireAuth, requireRole('Admin', 'Operator'));
-
+// View-only - dibuka untuk semua role yang login
 router.get('/', pmLineHistoryController.list);
-router.post('/', pmLineHistoryController.create);
+
+// Submit PM Monthly/Weekly - butuh permission 'pm_line.submit' (lihat
+// catatan yang sama di pmPartHistoryRoutes.js)
+router.post('/', requirePermission('pm_line.submit'), pmLineHistoryController.create);
 
 module.exports = router;

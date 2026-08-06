@@ -2,30 +2,34 @@
 const express = require('express');
 const inventoryController = require('../controllers/inventoryController');
 const requireAuth = require('../middlewares/authMiddleware');
-const requireRole = require('../middlewares/roleMiddleware');
-const requireMasterDataEditAccess = require('../middlewares/masterDataAccess');
+const requirePermission = require('../middlewares/permissionMiddleware');
 
 const router = express.Router();
 router.use(requireAuth);
 
-// GET - Admin & Operator (sama seperti akses baca Master Data lain)
-router.get('/', requireRole('Admin', 'Operator'), inventoryController.list);
-router.get('/rop-status', requireRole('Admin', 'Operator'), inventoryController.ropStatus);
-router.get('/:id', requireRole('Admin', 'Operator'), inventoryController.detail);
-router.get('/:id/movements', requireRole('Admin', 'Operator'), inventoryController.movements);
+// GET - view-only, dibuka untuk semua role yang login
+router.get('/', inventoryController.list);
+router.get('/rop-status', inventoryController.ropStatus);
+router.get('/:id', inventoryController.detail);
+router.get('/:id/movements', inventoryController.movements);
 
-// Create/Update Inventory Item - dianggap Master Data (bikin/ubah "jenis
-// spare part" itu sendiri) - Admin, atau Operator kalau
-// allow_operator_edit_master_data = true. Sama pola dengan Parts/Lines.
-router.post('/', requireMasterDataEditAccess, inventoryController.create);
-router.patch('/:id', requireMasterDataEditAccess, inventoryController.update);
-
-// Stock movement (IN/OUT/ADJUSTMENT) - dianggap OPERASIONAL harian, bukan
-// Master Data - dibuka untuk Admin & Operator sama rata, konsisten dengan
-// pola submit PM Part History (pmPartHistoryRoutes.js) yang juga operasional.
-router.post('/:id/adjust-stock', requireRole('Admin', 'Operator'), inventoryController.adjustStock);
-
-// Delete Inventory Item - Admin only (sama pola dengan delete Line/Part)
-router.delete('/:id', requireRole('Admin'), inventoryController.remove);
+// SEMUA aksi tulis Inventory (create/update item, catat stok, hapus item)
+// disatukan di bawah 1 permission 'inventory.manage' - supaya role custom
+// (mis. "Purchasing") bisa di-assign akses penuh ke Inventory tanpa perlu
+// jadi "Operator". Operator sudah di-seed permission ini sejak migration
+// 1700000011000.
+//
+// CATATAN PERUBAHAN PERILAKU dari sebelumnya: create/update Item dulu pakai
+// requireMasterDataEditAccess (Operator hanya boleh kalau setting
+// allow_operator_edit_master_data=true) dan delete dulu Admin-only. Sekarang
+// SEMUA disatukan ke permission inventory.manage supaya konsisten 1 aturan
+// untuk semua aksi Inventory - Operator otomatis dapat akses penuh
+// Inventory (create/update/delete/adjust-stock) terlepas dari setting
+// allow_operator_edit_master_data itu (yang tetap berlaku khusus untuk
+// Lines/Parts/CL Mapping saja).
+router.post('/', requirePermission('inventory.manage'), inventoryController.create);
+router.patch('/:id', requirePermission('inventory.manage'), inventoryController.update);
+router.post('/:id/adjust-stock', requirePermission('inventory.manage'), inventoryController.adjustStock);
+router.delete('/:id', requirePermission('inventory.manage'), inventoryController.remove);
 
 module.exports = router;

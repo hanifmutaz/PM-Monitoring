@@ -2,11 +2,11 @@
 const express = require('express');
 const dashboardController = require('../controllers/dashboardController');
 const requireAuth = require('../middlewares/authMiddleware');
-const requireRole = require('../middlewares/roleMiddleware');
 
 const router = express.Router();
 
-router.use(requireAuth, requireRole('Admin', 'Operator'));
+// View-only - sama alasannya dengan pmLineRoutes.js
+router.use(requireAuth);
 
 router.get('/summary', dashboardController.summary);
 router.get('/attention', dashboardController.attention);

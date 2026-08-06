@@ -14,6 +14,7 @@ const userManagementRoutes = require('./userManagementRoutes');
 const auditLogRoutes = require('./auditLogRoutes');
 const masterDataImportRoutes = require('./masterDataImportRoutes');
 const inventoryRoutes = require('./inventoryRoutes');
+const roleManagementRoutes = require('./roleManagementRoutes');
 
 const router = express.Router();
 
@@ -31,5 +32,6 @@ router.use('/users', userManagementRoutes);
 router.use('/audit-log', auditLogRoutes);
 router.use('/master-data-import', masterDataImportRoutes);
 router.use('/inventory', inventoryRoutes);
+router.use('/roles', roleManagementRoutes);
 
 module.exports = router;

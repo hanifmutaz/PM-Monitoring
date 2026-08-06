@@ -1,25 +1,11 @@
 // src/pages/UserManagementPage.jsx
 import { useState } from 'react';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { useUsers, useUserMutations } from '../hooks/useUsers';
+import { useRoles, usePermissionCatalog, useRoleMutations } from '../hooks/useRoles';
 import Modal from '../components/Modal';
 import ToggleSwitch from '../components/ToggleSwitch';
-
-// CATATAN: API spec (03_API_SPECIFICATION.md §11) minta role_id (integer) di
-// body POST/PATCH /users, tapi tidak ada endpoint GET /roles untuk
-// enumerasi id-nya, dan GET /users cuma balikin nama role (bukan id).
-// Karena seed roles di 04_DATABASE_SCHEMA.sql urutannya FIXED
-// (INSERT INTO roles (name) VALUES ('Admin'), ('Operator') - SERIAL,
-// jadi Admin=1, Operator=2 di database baru manapun yang migration-nya
-// dijalankan dari awal), mapping ini di-hardcode di sini. Kalau di masa
-// depan ada role tambahan (sesuai catatan "role bisa ditambah nanti"),
-// mapping ini WAJIB disesuaikan atau backend perlu nambah endpoint
-// GET /roles supaya gak hardcode lagi.
-const ROLE_OPTIONS = [
-  { id: 1, name: 'Admin' },
-  { id: 2, name: 'Operator' },
-];
 
 const emptyForm = { username: '', email: '', password: '', full_name: '', role_id: '' };
 
@@ -32,6 +18,7 @@ function UserFormModal({ initial, onClose }) {
   );
   const [errors, setErrors] = useState({});
   const { create, update } = useUserMutations();
+  const { data: roles = [] } = useRoles();
   const pending = create.isPending || update.isPending;
 
   async function handleSubmit(e) {
@@ -112,7 +99,7 @@ function UserFormModal({ initial, onClose }) {
               required
             >
               <option value="">Pilih Role</option>
-              {ROLE_OPTIONS.map((r) => (
+              {roles.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
                 </option>
@@ -138,6 +125,7 @@ function UserFormModal({ initial, onClose }) {
 function PendingApprovalSection() {
   const { data: pendingUsers = [], isLoading } = useUsers({ status: 'PENDING' });
   const { approve, reject } = useUserMutations();
+  const { data: roles = [] } = useRoles();
   const [roleSelections, setRoleSelections] = useState({});
   const [error, setError] = useState('');
 
@@ -207,7 +195,7 @@ function PendingApprovalSection() {
                   onChange={(e) => setRoleSelections({ ...roleSelections, [u.id]: e.target.value })}
                 >
                   <option value="">Pilih Role</option>
-                  {ROLE_OPTIONS.map((r) => (
+                  {roles.map((r) => (
                     <option key={r.id} value={r.id}>
                       {r.name}
                     </option>
@@ -242,6 +230,194 @@ function PendingApprovalSection() {
   );
 }
 
+function RoleManagementSection() {
+  const { data: roles = [], isLoading } = useRoles();
+  const { data: permissionCatalog = [] } = usePermissionCatalog();
+  const { create, updatePermissions, remove } = useRoleMutations();
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newRolePerms, setNewRolePerms] = useState([]);
+  const [error, setError] = useState('');
+  const [expandedRoleId, setExpandedRoleId] = useState(null);
+  const [draftPerms, setDraftPerms] = useState({});
+
+  function togglePerm(key, currentList, setter) {
+    setter(currentList.includes(key) ? currentList.filter((k) => k !== key) : [...currentList, key]);
+  }
+
+  async function handleCreate(e) {
+    e.preventDefault();
+    setError('');
+    if (!newRoleName.trim()) return;
+    try {
+      await create.mutateAsync({ name: newRoleName.trim(), permissions: newRolePerms });
+      setNewRoleName('');
+      setNewRolePerms([]);
+    } catch (err) {
+      setError(err.response?.data?.errors?.name || err.response?.data?.message || 'Gagal membuat role');
+    }
+  }
+
+  function startEditPermissions(role) {
+    setExpandedRoleId(role.id);
+    setDraftPerms({ ...draftPerms, [role.id]: role.permissions.includes('*') ? [] : [...role.permissions] });
+  }
+
+  async function saveDraftPermissions(role) {
+    setError('');
+    try {
+      await updatePermissions.mutateAsync({ id: role.id, permissions: draftPerms[role.id] || [] });
+      setExpandedRoleId(null);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal simpan permission');
+    }
+  }
+
+  async function handleDelete(role) {
+    if (!confirm(`Hapus role "${role.name}"? Role ini harus tidak dipakai user manapun.`)) return;
+    setError('');
+    try {
+      await remove.mutateAsync(role.id);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Gagal menghapus role');
+    }
+  }
+
+  return (
+    <div className="panel" style={{ marginBottom: 16 }}>
+      <div className="panel-header">
+        <h2 className="panel-title">Role & Permission</h2>
+      </div>
+
+      {error && (
+        <div className="error-state" style={{ marginBottom: 12, padding: 8, fontSize: 12 }}>
+          {error}
+        </div>
+      )}
+
+      {isLoading && <div className="empty-state">Memuat data...</div>}
+
+      {!isLoading && (
+        <table className="data-table" style={{ marginBottom: 16 }}>
+          <thead>
+            <tr>
+              <th>Nama Role</th>
+              <th className="mono">User</th>
+              <th>Permission</th>
+              <th style={{ width: 140 }}>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roles.map((role) => (
+              <tr key={role.id}>
+                <td>
+                  {role.name} {role.is_system && <span className="caption">(bawaan)</span>}
+                </td>
+                <td className="mono">{role.user_count}</td>
+                <td>
+                  {expandedRoleId === role.id ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {permissionCatalog.map((p) => (
+                        <label key={p.key} className="caption" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={(draftPerms[role.id] || []).includes(p.key)}
+                            onChange={() =>
+                              togglePerm(p.key, draftPerms[role.id] || [], (v) =>
+                                setDraftPerms({ ...draftPerms, [role.id]: v })
+                              )
+                            }
+                          />
+                          {p.label}
+                        </label>
+                      ))}
+                    </div>
+                  ) : role.name === 'Admin' ? (
+                    <span className="caption">Semua akses (superuser)</span>
+                  ) : (
+                    <span className="caption">
+                      {role.permissions.length > 0
+                        ? role.permissions
+                            .map((k) => permissionCatalog.find((p) => p.key === k)?.label || k)
+                            .join(', ')
+                        : 'Tidak ada akses khusus'}
+                    </span>
+                  )}
+                </td>
+                <td>
+                  {role.name === 'Admin' ? (
+                    '-'
+                  ) : expandedRoleId === role.id ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ padding: '4px 8px', fontSize: 12 }}
+                      onClick={() => saveDraftPermissions(role)}
+                      disabled={updatePermissions.isPending}
+                    >
+                      Simpan
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn-secondary btn"
+                        style={{ padding: 6, marginRight: 4 }}
+                        onClick={() => startEditPermissions(role)}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      {!role.is_system && (
+                        <button
+                          type="button"
+                          className="btn-secondary btn"
+                          style={{ padding: 6 }}
+                          onClick={() => handleDelete(role)}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <form onSubmit={handleCreate}>
+        <div className="caption" style={{ marginBottom: 6 }}>
+          Buat role baru
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <input
+            className="form-input"
+            style={{ flex: 1 }}
+            placeholder="mis. Purchasing"
+            value={newRoleName}
+            onChange={(e) => setNewRoleName(e.target.value)}
+          />
+          <button type="submit" className="btn btn-primary" disabled={create.isPending}>
+            {create.isPending ? 'Menyimpan...' : 'Buat Role'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {permissionCatalog.map((p) => (
+            <label key={p.key} className="caption" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={newRolePerms.includes(p.key)}
+                onChange={() => togglePerm(p.key, newRolePerms, setNewRolePerms)}
+              />
+              {p.label}
+            </label>
+          ))}
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function UserManagementPage() {
   usePageHeader({
     title: 'User Management',
@@ -255,6 +431,7 @@ function UserManagementPage() {
 
   return (
     <div>
+      <RoleManagementSection />
       <PendingApprovalSection />
 
       <div className="panel">

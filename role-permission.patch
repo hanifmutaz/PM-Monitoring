@@ -1,0 +1,1067 @@
+diff --git a/backend/migrations/1700000011000_add-role-permissions.sql b/backend/migrations/1700000011000_add-role-permissions.sql
+new file mode 100644
+index 0000000..407291e
+--- /dev/null
++++ b/backend/migrations/1700000011000_add-role-permissions.sql
+@@ -0,0 +1,65 @@
++-- 1700000011000_add-role-permissions.sql
++--
++-- Role bisa dibuat dari APLIKASI (bukan cuma 2 role hardcode Admin/Operator
++-- dari migration awal), dan role baru itu perlu akses granular per
++-- fitur/halaman (dikonfirmasi user), bukan sekadar label buat notifikasi.
++--
++-- DESAIN:
++--   - `roles.is_system` menandai Admin & Operator sebagai role bawaan yang
++--     TIDAK BOLEH dihapus/di-rename - karena beberapa bagian kode masih
++--     hardcode cek by NAME (Admin = superuser bypass semua permission check,
++--     lihat requirePermission() middleware). Role baru buatan Admin lewat
++--     app selalu is_system = FALSE, bebas diedit/dihapus (asal tidak ada
++--     user yang masih pakai role itu).
++--   - `permissions` - katalog FIXED capability yang ada di aplikasi.
++--     Menambah permission BARU = lewat migration (nempel ke fitur baru di
++--     kode), tapi ASSIGN permission ke role BISA dari UI - itu yang
++--     dikonfirmasi user ("perlu akses/permission halaman tertentu").
++--   - `role_permissions` - many-to-many role <-> permission.
++--   - Role "Admin" TIDAK butuh row di role_permissions - middleware
++--     requirePermission() selalu bypass total untuk role name = 'Admin'
++--     (superuser), row untuk Admin di tabel ini sifatnya opsional/informatif.
++--   - Operator di-seed permission PERSIS SAMA dengan behavior SEBELUM
++--     migration ini (pm_part.submit, pm_line.submit, inventory.manage) -
++--     supaya user existing TIDAK mendadak kehilangan akses apa pun.
++--   - Master Data TETAP pakai mekanisme lama (allow_operator_edit_master_data
++--     di app_settings, lihat masterDataAccess.js) - TIDAK dipindah ke sistem
++--     permission baru ini, supaya tidak ada 2 mekanisme tumpang tindih untuk
++--     fitur yang sama. Begitu juga Settings & User Management tetap Admin-only
++--     hardcode (terlalu sensitif untuk dibuka granular di tahap ini).
++
++ALTER TABLE roles ADD COLUMN is_system BOOLEAN NOT NULL DEFAULT FALSE;
++UPDATE roles SET is_system = TRUE WHERE name IN ('Admin', 'Operator');
++
++COMMENT ON COLUMN roles.is_system IS 'TRUE untuk role bawaan (Admin, Operator) - dilindungi dari rename/delete karena sebagian kode hardcode cek by name. Role baru buatan Admin selalu FALSE.';
++
++CREATE TABLE permissions (
++    key             VARCHAR(60) PRIMARY KEY,
++    label           VARCHAR(150) NOT NULL,
++    description     TEXT
++);
++
++COMMENT ON TABLE permissions IS 'Katalog fixed permission/capability. Menambah permission baru butuh migration (nempel ke kode fitur), TAPI assign ke role bisa dari UI Role Management.';
++
++CREATE TABLE role_permissions (
++    role_id         INT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
++    permission_key  VARCHAR(60) NOT NULL REFERENCES permissions(key) ON DELETE CASCADE,
++    PRIMARY KEY (role_id, permission_key)
++);
++
++COMMENT ON TABLE role_permissions IS 'Assignment permission ke role. Role Admin TIDAK wajib punya row di sini - middleware requirePermission() selalu bypass total untuk role name = Admin (superuser).';
++
++INSERT INTO permissions (key, label, description) VALUES
++('pm_part.submit', 'Submit Penggantian PM Part', 'Input riwayat penggantian part, termasuk lewat scan barcode Drawing No'),
++('pm_line.submit', 'Submit PM Monthly/Weekly', 'Input riwayat PM Monthly & Weekly per Line'),
++('inventory.manage', 'Kelola Inventory', 'CRUD Inventory Item, catat mutasi stok masuk/keluar, atur Lead Time')
++ON CONFLICT (key) DO NOTHING;
++
++-- Seed permission default Operator = PERSIS sama behavior sebelum migration
++-- ini (dulu hardcode requireRole('Admin','Operator') di 3 fitur ini)
++INSERT INTO role_permissions (role_id, permission_key)
++SELECT r.id, p.key
++FROM roles r
++CROSS JOIN (VALUES ('pm_part.submit'), ('pm_line.submit'), ('inventory.manage')) AS p(key)
++WHERE r.name = 'Operator'
++ON CONFLICT DO NOTHING;
+diff --git a/backend/src/controllers/roleManagementController.js b/backend/src/controllers/roleManagementController.js
+new file mode 100644
+index 0000000..45dae5e
+--- /dev/null
++++ b/backend/src/controllers/roleManagementController.js
+@@ -0,0 +1,46 @@
++// src/controllers/roleManagementController.js
++const roleManagementService = require('../services/roleManagementService');
++const { validateCreateRole, validateUpdateRole } = require('../validators/roleValidator');
++const asyncHandler = require('../utils/asyncHandler');
++const AppError = require('../utils/AppError');
++
++const list = asyncHandler(async (req, res) => {
++  const data = await roleManagementService.listRoles();
++  res.status(200).json({ success: true, message: 'Success', data });
++});
++
++const listPermissions = asyncHandler(async (req, res) => {
++  const data = await roleManagementService.listAvailablePermissions();
++  res.status(200).json({ success: true, message: 'Success', data });
++});
++
++const create = asyncHandler(async (req, res) => {
++  const { valid, errors } = validateCreateRole(req.body);
++  if (!valid) throw AppError.badRequest('Validasi gagal', errors);
++
++  const data = await roleManagementService.createRole(req.body, req.user.id);
++  res.status(201).json({ success: true, message: 'Success', data });
++});
++
++const update = asyncHandler(async (req, res) => {
++  const { valid, errors } = validateUpdateRole(req.body);
++  if (!valid) throw AppError.badRequest('Validasi gagal', errors);
++
++  const data = await roleManagementService.updateRole(Number(req.params.id), req.body, req.user.id);
++  res.status(200).json({ success: true, message: 'Success', data });
++});
++
++const updatePermissions = asyncHandler(async (req, res) => {
++  if (!Array.isArray(req.body.permissions)) {
++    throw AppError.badRequest('Validasi gagal', { permissions: 'permissions harus berupa array' });
++  }
++  const data = await roleManagementService.updateRolePermissions(Number(req.params.id), req.body.permissions, req.user.id);
++  res.status(200).json({ success: true, message: 'Success', data });
++});
++
++const remove = asyncHandler(async (req, res) => {
++  await roleManagementService.deleteRole(Number(req.params.id), req.user.id);
++  res.status(200).json({ success: true, message: 'Success' });
++});
++
++module.exports = { list, listPermissions, create, update, updatePermissions, remove };
+diff --git a/backend/src/middlewares/authMiddleware.js b/backend/src/middlewares/authMiddleware.js
+index 3812f77..b8a61ba 100644
+--- a/backend/src/middlewares/authMiddleware.js
++++ b/backend/src/middlewares/authMiddleware.js
+@@ -1,6 +1,7 @@
+ // src/middlewares/authMiddleware.js
+ const { verifyToken } = require('../utils/jwt');
+ const userQueries = require('../sql/userQueries');
++const permissionQueries = require('../sql/permissionQueries');
+ const AppError = require('../utils/AppError');
+ const asyncHandler = require('../utils/asyncHandler');
+ 
+@@ -24,11 +25,20 @@ const requireAuth = asyncHandler(async (req, res, next) => {
+     throw AppError.unauthorized('User tidak ditemukan atau tidak aktif');
+   }
+ 
++  // Admin = superuser, bypass semua permission check (lihat
++  // permissionMiddleware.js). Role lain: resolve permission dari
++  // role_permissions - query per-request (bukan di-bake ke JWT) supaya
++  // perubahan permission oleh Admin langsung berlaku tanpa perlu re-login.
++  const permissions =
++    user.role_name === 'Admin' ? ['*'] : await permissionQueries.findPermissionKeysByRoleId(user.role_id);
++
+   req.user = {
+     id: user.id,
+     username: user.username,
+     full_name: user.full_name,
+     role: user.role_name,
++    role_id: user.role_id,
++    permissions,
+   };
+   next();
+ });
+diff --git a/backend/src/middlewares/permissionMiddleware.js b/backend/src/middlewares/permissionMiddleware.js
+new file mode 100644
+index 0000000..302e126
+--- /dev/null
++++ b/backend/src/middlewares/permissionMiddleware.js
+@@ -0,0 +1,25 @@
++// src/middlewares/permissionMiddleware.js
++const AppError = require('../utils/AppError');
++
++/**
++ * Factory permission-check middleware. Dipasang SETELAH requireAuth.
++ * Admin SELALU bypass (superuser) - req.user.permissions berisi ['*'] untuk
++ * Admin (lihat authMiddleware.js), jadi cukup cek includes('*') di sini,
++ * tanpa perlu hardcode nama role 'Admin' lagi di banyak tempat.
++ *
++ * Contoh: router.post('/', requireAuth, requirePermission('inventory.manage'), ctrl.create)
++ */
++function requirePermission(permissionKey) {
++  return function permissionCheck(req, res, next) {
++    if (!req.user) {
++      throw AppError.unauthorized('Token tidak ada');
++    }
++    const perms = req.user.permissions || [];
++    if (perms.includes('*') || perms.includes(permissionKey)) {
++      return next();
++    }
++    throw AppError.forbidden(`Role Anda tidak punya akses "${permissionKey}"`);
++  };
++}
++
++module.exports = requirePermission;
+diff --git a/backend/src/routes/dashboardRoutes.js b/backend/src/routes/dashboardRoutes.js
+index 74d1b7c..821bf47 100644
+--- a/backend/src/routes/dashboardRoutes.js
++++ b/backend/src/routes/dashboardRoutes.js
+@@ -2,11 +2,11 @@
+ const express = require('express');
+ const dashboardController = require('../controllers/dashboardController');
+ const requireAuth = require('../middlewares/authMiddleware');
+-const requireRole = require('../middlewares/roleMiddleware');
+ 
+ const router = express.Router();
+ 
+-router.use(requireAuth, requireRole('Admin', 'Operator'));
++// View-only - sama alasannya dengan pmLineRoutes.js
++router.use(requireAuth);
+ 
+ router.get('/summary', dashboardController.summary);
+ router.get('/attention', dashboardController.attention);
+diff --git a/backend/src/routes/index.js b/backend/src/routes/index.js
+index 3b63f4b..56933be 100644
+--- a/backend/src/routes/index.js
++++ b/backend/src/routes/index.js
+@@ -14,6 +14,7 @@ const userManagementRoutes = require('./userManagementRoutes');
+ const auditLogRoutes = require('./auditLogRoutes');
+ const masterDataImportRoutes = require('./masterDataImportRoutes');
+ const inventoryRoutes = require('./inventoryRoutes');
++const roleManagementRoutes = require('./roleManagementRoutes');
+ 
+ const router = express.Router();
+ 
+@@ -31,5 +32,6 @@ router.use('/users', userManagementRoutes);
+ router.use('/audit-log', auditLogRoutes);
+ router.use('/master-data-import', masterDataImportRoutes);
+ router.use('/inventory', inventoryRoutes);
++router.use('/roles', roleManagementRoutes);
+ 
+ module.exports = router;
+diff --git a/backend/src/routes/inventoryRoutes.js b/backend/src/routes/inventoryRoutes.js
+index 946be9d..50f8c34 100644
+--- a/backend/src/routes/inventoryRoutes.js
++++ b/backend/src/routes/inventoryRoutes.js
+@@ -2,30 +2,34 @@
+ const express = require('express');
+ const inventoryController = require('../controllers/inventoryController');
+ const requireAuth = require('../middlewares/authMiddleware');
+-const requireRole = require('../middlewares/roleMiddleware');
+-const requireMasterDataEditAccess = require('../middlewares/masterDataAccess');
++const requirePermission = require('../middlewares/permissionMiddleware');
+ 
+ const router = express.Router();
+ router.use(requireAuth);
+ 
+-// GET - Admin & Operator (sama seperti akses baca Master Data lain)
+-router.get('/', requireRole('Admin', 'Operator'), inventoryController.list);
+-router.get('/rop-status', requireRole('Admin', 'Operator'), inventoryController.ropStatus);
+-router.get('/:id', requireRole('Admin', 'Operator'), inventoryController.detail);
+-router.get('/:id/movements', requireRole('Admin', 'Operator'), inventoryController.movements);
++// GET - view-only, dibuka untuk semua role yang login
++router.get('/', inventoryController.list);
++router.get('/rop-status', inventoryController.ropStatus);
++router.get('/:id', inventoryController.detail);
++router.get('/:id/movements', inventoryController.movements);
+ 
+-// Create/Update Inventory Item - dianggap Master Data (bikin/ubah "jenis
+-// spare part" itu sendiri) - Admin, atau Operator kalau
+-// allow_operator_edit_master_data = true. Sama pola dengan Parts/Lines.
+-router.post('/', requireMasterDataEditAccess, inventoryController.create);
+-router.patch('/:id', requireMasterDataEditAccess, inventoryController.update);
+-
+-// Stock movement (IN/OUT/ADJUSTMENT) - dianggap OPERASIONAL harian, bukan
+-// Master Data - dibuka untuk Admin & Operator sama rata, konsisten dengan
+-// pola submit PM Part History (pmPartHistoryRoutes.js) yang juga operasional.
+-router.post('/:id/adjust-stock', requireRole('Admin', 'Operator'), inventoryController.adjustStock);
+-
+-// Delete Inventory Item - Admin only (sama pola dengan delete Line/Part)
+-router.delete('/:id', requireRole('Admin'), inventoryController.remove);
++// SEMUA aksi tulis Inventory (create/update item, catat stok, hapus item)
++// disatukan di bawah 1 permission 'inventory.manage' - supaya role custom
++// (mis. "Purchasing") bisa di-assign akses penuh ke Inventory tanpa perlu
++// jadi "Operator". Operator sudah di-seed permission ini sejak migration
++// 1700000011000.
++//
++// CATATAN PERUBAHAN PERILAKU dari sebelumnya: create/update Item dulu pakai
++// requireMasterDataEditAccess (Operator hanya boleh kalau setting
++// allow_operator_edit_master_data=true) dan delete dulu Admin-only. Sekarang
++// SEMUA disatukan ke permission inventory.manage supaya konsisten 1 aturan
++// untuk semua aksi Inventory - Operator otomatis dapat akses penuh
++// Inventory (create/update/delete/adjust-stock) terlepas dari setting
++// allow_operator_edit_master_data itu (yang tetap berlaku khusus untuk
++// Lines/Parts/CL Mapping saja).
++router.post('/', requirePermission('inventory.manage'), inventoryController.create);
++router.patch('/:id', requirePermission('inventory.manage'), inventoryController.update);
++router.post('/:id/adjust-stock', requirePermission('inventory.manage'), inventoryController.adjustStock);
++router.delete('/:id', requirePermission('inventory.manage'), inventoryController.remove);
+ 
+ module.exports = router;
+diff --git a/backend/src/routes/pmLineHistoryRoutes.js b/backend/src/routes/pmLineHistoryRoutes.js
+index d36d0ef..5682695 100644
+--- a/backend/src/routes/pmLineHistoryRoutes.js
++++ b/backend/src/routes/pmLineHistoryRoutes.js
+@@ -2,13 +2,16 @@
+ const express = require('express');
+ const pmLineHistoryController = require('../controllers/pmLineHistoryController');
+ const requireAuth = require('../middlewares/authMiddleware');
+-const requireRole = require('../middlewares/roleMiddleware');
++const requirePermission = require('../middlewares/permissionMiddleware');
+ 
+ const router = express.Router();
++router.use(requireAuth);
+ 
+-router.use(requireAuth, requireRole('Admin', 'Operator'));
+-
++// View-only - dibuka untuk semua role yang login
+ router.get('/', pmLineHistoryController.list);
+-router.post('/', pmLineHistoryController.create);
++
++// Submit PM Monthly/Weekly - butuh permission 'pm_line.submit' (lihat
++// catatan yang sama di pmPartHistoryRoutes.js)
++router.post('/', requirePermission('pm_line.submit'), pmLineHistoryController.create);
+ 
+ module.exports = router;
+diff --git a/backend/src/routes/pmLineRoutes.js b/backend/src/routes/pmLineRoutes.js
+index b896949..162f9e7 100644
+--- a/backend/src/routes/pmLineRoutes.js
++++ b/backend/src/routes/pmLineRoutes.js
+@@ -2,11 +2,13 @@
+ const express = require('express');
+ const pmLineController = require('../controllers/pmLineController');
+ const requireAuth = require('../middlewares/authMiddleware');
+-const requireRole = require('../middlewares/roleMiddleware');
+ 
+ const router = express.Router();
+ 
+-router.use(requireAuth, requireRole('Admin', 'Operator'));
++// View-only - dibuka untuk semua role yang sudah login (Admin, Operator,
++// atau role custom apa pun) - monitoring status Line aman dilihat siapa saja
++// yang punya akun aktif di sistem ini.
++router.use(requireAuth);
+ 
+ router.get('/', pmLineController.status);
+ 
+diff --git a/backend/src/routes/pmPartHistoryRoutes.js b/backend/src/routes/pmPartHistoryRoutes.js
+index 6caee8a..a2ec16a 100644
+--- a/backend/src/routes/pmPartHistoryRoutes.js
++++ b/backend/src/routes/pmPartHistoryRoutes.js
+@@ -2,13 +2,19 @@
+ const express = require('express');
+ const pmPartHistoryController = require('../controllers/pmPartHistoryController');
+ const requireAuth = require('../middlewares/authMiddleware');
+-const requireRole = require('../middlewares/roleMiddleware');
++const requirePermission = require('../middlewares/permissionMiddleware');
+ 
+ const router = express.Router();
++router.use(requireAuth);
+ 
+-router.use(requireAuth, requireRole('Admin', 'Operator'));
+-
++// View-only - dibuka untuk semua role yang login
+ router.get('/', pmPartHistoryController.list);
+-router.post('/', pmPartHistoryController.create);
++
++// Submit penggantian part (termasuk lewat scan barcode Drawing No) - butuh
++// permission 'pm_part.submit'. Admin selalu bypass (superuser). Operator
++// di-seed permission ini sejak migration 1700000011000 (behavior lama tetap
++// sama), role custom baru (mis. "Purchasing") HARUS di-assign eksplisit
++// oleh Admin lewat Role Management kalau memang perlu submit juga.
++router.post('/', requirePermission('pm_part.submit'), pmPartHistoryController.create);
+ 
+ module.exports = router;
+diff --git a/backend/src/routes/pmPartRoutes.js b/backend/src/routes/pmPartRoutes.js
+index db0de71..16d0a77 100644
+--- a/backend/src/routes/pmPartRoutes.js
++++ b/backend/src/routes/pmPartRoutes.js
+@@ -2,11 +2,11 @@
+ const express = require('express');
+ const pmPartController = require('../controllers/pmPartController');
+ const requireAuth = require('../middlewares/authMiddleware');
+-const requireRole = require('../middlewares/roleMiddleware');
+ 
+ const router = express.Router();
+ 
+-router.use(requireAuth, requireRole('Admin', 'Operator'));
++// View-only - sama alasannya dengan pmLineRoutes.js
++router.use(requireAuth);
+ 
+ router.get('/', pmPartController.list);
+ router.get('/:partId', pmPartController.detail);
+diff --git a/backend/src/routes/roleManagementRoutes.js b/backend/src/routes/roleManagementRoutes.js
+new file mode 100644
+index 0000000..ea62c85
+--- /dev/null
++++ b/backend/src/routes/roleManagementRoutes.js
+@@ -0,0 +1,21 @@
++// src/routes/roleManagementRoutes.js
++const express = require('express');
++const roleManagementController = require('../controllers/roleManagementController');
++const requireAuth = require('../middlewares/authMiddleware');
++const requireRole = require('../middlewares/roleMiddleware');
++
++const router = express.Router();
++
++// Kelola role & permission tetap Admin-only (bukan dibuka lewat sistem
++// permission baru) - terlalu sensitif untuk didelegasikan (kalau role lain
++// bisa assign permission, mereka bisa kasih diri sendiri akses apa pun).
++router.use(requireAuth, requireRole('Admin'));
++
++router.get('/', roleManagementController.list);
++router.get('/permissions', roleManagementController.listPermissions);
++router.post('/', roleManagementController.create);
++router.patch('/:id', roleManagementController.update);
++router.patch('/:id/permissions', roleManagementController.updatePermissions);
++router.delete('/:id', roleManagementController.remove);
++
++module.exports = router;
+diff --git a/backend/src/services/roleManagementService.js b/backend/src/services/roleManagementService.js
+new file mode 100644
+index 0000000..b2dd398
+--- /dev/null
++++ b/backend/src/services/roleManagementService.js
+@@ -0,0 +1,184 @@
++// src/services/roleManagementService.js
++//
++// Role bisa dibuat dari aplikasi (dikonfirmasi user), dengan akses granular
++// per fitur lewat permission (bukan cuma label buat notifikasi). Role
++// bawaan (Admin, Operator) dilindungi dari rename/delete - lihat
++// migration 1700000011000 untuk alasan lengkapnya.
++
++const db = require('../config/db');
++const roleQueries = require('../sql/roleQueries');
++const permissionQueries = require('../sql/permissionQueries');
++const { recordAudit } = require('../utils/auditLog');
++const AppError = require('../utils/AppError');
++
++async function listRoles() {
++  const roles = await roleQueries.findAll();
++  const results = [];
++  for (const role of roles) {
++    const permissionKeys =
++      role.name === 'Admin' ? ['*'] : await permissionQueries.findPermissionKeysByRoleId(role.id);
++    results.push({ ...role, permissions: permissionKeys });
++  }
++  return results;
++}
++
++async function listAvailablePermissions() {
++  return permissionQueries.findAllPermissions();
++}
++
++async function createRole({ name, permissions }, userId) {
++  const client = await db.getClient();
++  try {
++    await client.query('BEGIN');
++
++    const existing = await roleQueries.findByName(name, client);
++    if (existing) {
++      throw AppError.badRequest('Validasi gagal', { name: 'Nama role sudah dipakai' });
++    }
++
++    const created = await roleQueries.create(name, client);
++    await permissionQueries.setRolePermissions(created.id, permissions || [], client);
++
++    await recordAudit(
++      {
++        tableName: 'roles',
++        recordId: created.id,
++        action: 'CREATE',
++        oldValue: null,
++        newValue: { ...created, permissions },
++        userId,
++      },
++      client
++    );
++
++    await client.query('COMMIT');
++    return { ...created, permissions: permissions || [] };
++  } catch (err) {
++    await client.query('ROLLBACK');
++    throw err;
++  } finally {
++    client.release();
++  }
++}
++
++async function updateRole(id, { name, permissions }, userId) {
++  const client = await db.getClient();
++  try {
++    await client.query('BEGIN');
++
++    const before = await roleQueries.findById(id, client);
++    if (!before) throw AppError.notFound('Role tidak ditemukan');
++    if (before.is_system) {
++      throw AppError.conflict('Role bawaan (Admin/Operator) tidak bisa diubah namanya, tapi permission tetap bisa disesuaikan');
++    }
++
++    let updated = before;
++    if (name !== undefined && name !== before.name) {
++      const existing = await roleQueries.findByName(name, client);
++      if (existing && existing.id !== id) {
++        throw AppError.badRequest('Validasi gagal', { name: 'Nama role sudah dipakai' });
++      }
++      updated = await roleQueries.update(id, name, client);
++    }
++
++    if (permissions !== undefined) {
++      await permissionQueries.setRolePermissions(id, permissions, client);
++    }
++
++    await recordAudit(
++      {
++        tableName: 'roles',
++        recordId: id,
++        action: 'UPDATE',
++        oldValue: before,
++        newValue: { ...updated, permissions },
++        userId,
++      },
++      client
++    );
++
++    await client.query('COMMIT');
++    return { ...updated, permissions: permissions ?? (await permissionQueries.findPermissionKeysByRoleId(id)) };
++  } catch (err) {
++    await client.query('ROLLBACK');
++    throw err;
++  } finally {
++    client.release();
++  }
++}
++
++/**
++ * Update permission SAJA (dipakai buat role bawaan Admin/Operator - nama
++ * tidak bisa diubah, tapi Operator boleh disesuaikan permission-nya kalau
++ * Admin mau perluas/persempit akses default Operator).
++ */
++async function updateRolePermissions(id, permissions, userId) {
++  const client = await db.getClient();
++  try {
++    await client.query('BEGIN');
++
++    const role = await roleQueries.findById(id, client);
++    if (!role) throw AppError.notFound('Role tidak ditemukan');
++    if (role.name === 'Admin') {
++      throw AppError.conflict('Role Admin selalu punya akses penuh (superuser), tidak perlu/tidak bisa diatur permission-nya');
++    }
++
++    const before = await permissionQueries.findPermissionKeysByRoleId(id, client);
++    await permissionQueries.setRolePermissions(id, permissions, client);
++
++    await recordAudit(
++      {
++        tableName: 'role_permissions',
++        recordId: id,
++        action: 'UPDATE',
++        oldValue: { permissions: before },
++        newValue: { permissions },
++        userId,
++        actionDetail: `Permission role "${role.name}" diubah`,
++      },
++      client
++    );
++
++    await client.query('COMMIT');
++    return { ...role, permissions };
++  } catch (err) {
++    await client.query('ROLLBACK');
++    throw err;
++  } finally {
++    client.release();
++  }
++}
++
++async function deleteRole(id, userId) {
++  const client = await db.getClient();
++  try {
++    await client.query('BEGIN');
++
++    const before = await roleQueries.findById(id, client);
++    if (!before) throw AppError.notFound('Role tidak ditemukan');
++    if (before.is_system) {
++      throw AppError.conflict('Role bawaan (Admin/Operator) tidak bisa dihapus');
++    }
++
++    const userCount = await roleQueries.countUsersByRole(id, client);
++    if (userCount > 0) {
++      throw AppError.conflict(`Role ini masih dipakai ${userCount} user, pindahkan dulu user-nya ke role lain sebelum dihapus`);
++    }
++
++    await roleQueries.remove(id, client);
++
++    await recordAudit(
++      { tableName: 'roles', recordId: id, action: 'DELETE', oldValue: before, newValue: null, userId },
++      client
++    );
++
++    await client.query('COMMIT');
++  } catch (err) {
++    await client.query('ROLLBACK');
++    throw err;
++  } finally {
++    client.release();
++  }
++}
++
++module.exports = { listRoles, listAvailablePermissions, createRole, updateRole, updateRolePermissions, deleteRole };
+diff --git a/backend/src/sql/permissionQueries.js b/backend/src/sql/permissionQueries.js
+new file mode 100644
+index 0000000..8bf8156
+--- /dev/null
++++ b/backend/src/sql/permissionQueries.js
+@@ -0,0 +1,32 @@
++// src/sql/permissionQueries.js
++const db = require('../config/db');
++
++async function findAllPermissions(runner = db) {
++  const result = await runner.query(`SELECT key, label, description FROM permissions ORDER BY key ASC`);
++  return result.rows;
++}
++
++async function findPermissionKeysByRoleId(roleId, runner = db) {
++  const result = await runner.query(`SELECT permission_key FROM role_permissions WHERE role_id = $1`, [roleId]);
++  return result.rows.map((r) => r.permission_key);
++}
++
++async function hasPermission(roleId, permissionKey, runner = db) {
++  const result = await runner.query(
++    `SELECT 1 FROM role_permissions WHERE role_id = $1 AND permission_key = $2 LIMIT 1`,
++    [roleId, permissionKey]
++  );
++  return result.rows.length > 0;
++}
++
++async function setRolePermissions(roleId, permissionKeys, runner = db) {
++  await runner.query(`DELETE FROM role_permissions WHERE role_id = $1`, [roleId]);
++  if (!permissionKeys || permissionKeys.length === 0) return;
++  const values = permissionKeys.map((_, i) => `($1, $${i + 2})`).join(', ');
++  await runner.query(
++    `INSERT INTO role_permissions (role_id, permission_key) VALUES ${values} ON CONFLICT DO NOTHING`,
++    [roleId, ...permissionKeys]
++  );
++}
++
++module.exports = { findAllPermissions, findPermissionKeysByRoleId, hasPermission, setRolePermissions };
+diff --git a/backend/src/sql/roleQueries.js b/backend/src/sql/roleQueries.js
+new file mode 100644
+index 0000000..514f86b
+--- /dev/null
++++ b/backend/src/sql/roleQueries.js
+@@ -0,0 +1,49 @@
++// src/sql/roleQueries.js
++const db = require('../config/db');
++
++async function findAll(runner = db) {
++  const result = await runner.query(
++    `SELECT r.id, r.name, r.is_system,
++            (SELECT COUNT(*)::int FROM users u WHERE u.role_id = r.id) AS user_count
++     FROM roles r
++     ORDER BY r.is_system DESC, r.name ASC`
++  );
++  return result.rows;
++}
++
++async function findById(id, runner = db) {
++  const result = await runner.query(`SELECT id, name, is_system FROM roles WHERE id = $1`, [id]);
++  return result.rows[0] || null;
++}
++
++async function findByName(name, runner = db) {
++  const result = await runner.query(`SELECT id, name, is_system FROM roles WHERE name = $1`, [name]);
++  return result.rows[0] || null;
++}
++
++async function create(name, runner = db) {
++  const result = await runner.query(
++    `INSERT INTO roles (name, is_system) VALUES ($1, FALSE) RETURNING id, name, is_system`,
++    [name]
++  );
++  return result.rows[0];
++}
++
++async function update(id, name, runner = db) {
++  const result = await runner.query(`UPDATE roles SET name = $1 WHERE id = $2 RETURNING id, name, is_system`, [
++    name,
++    id,
++  ]);
++  return result.rows[0] || null;
++}
++
++async function remove(id, runner = db) {
++  await runner.query(`DELETE FROM roles WHERE id = $1`, [id]);
++}
++
++async function countUsersByRole(id, runner = db) {
++  const result = await runner.query(`SELECT COUNT(*)::int AS count FROM users WHERE role_id = $1`, [id]);
++  return result.rows[0].count;
++}
++
++module.exports = { findAll, findById, findByName, create, update, remove, countUsersByRole };
+diff --git a/backend/src/validators/roleValidator.js b/backend/src/validators/roleValidator.js
+new file mode 100644
+index 0000000..fc1fa13
+--- /dev/null
++++ b/backend/src/validators/roleValidator.js
+@@ -0,0 +1,31 @@
++// src/validators/roleValidator.js
++
++function validateCreateRole(body) {
++  const errors = {};
++  if (!body || typeof body.name !== 'string' || body.name.trim() === '') {
++    errors.name = 'Nama role wajib diisi';
++  } else if (body.name.length > 50) {
++    errors.name = 'Nama role maksimal 50 karakter';
++  }
++  if (body && body.permissions !== undefined && !Array.isArray(body.permissions)) {
++    errors.permissions = 'permissions harus berupa array';
++  }
++  return { valid: Object.keys(errors).length === 0, errors };
++}
++
++function validateUpdateRole(body) {
++  const errors = {};
++  if (body.name !== undefined) {
++    if (typeof body.name !== 'string' || body.name.trim() === '') {
++      errors.name = 'Nama role tidak boleh kosong';
++    } else if (body.name.length > 50) {
++      errors.name = 'Nama role maksimal 50 karakter';
++    }
++  }
++  if (body.permissions !== undefined && !Array.isArray(body.permissions)) {
++    errors.permissions = 'permissions harus berupa array';
++  }
++  return { valid: Object.keys(errors).length === 0, errors };
++}
++
++module.exports = { validateCreateRole, validateUpdateRole };
+diff --git a/frontend/src/api/rolesApi.js b/frontend/src/api/rolesApi.js
+new file mode 100644
+index 0000000..76e8441
+--- /dev/null
++++ b/frontend/src/api/rolesApi.js
+@@ -0,0 +1,31 @@
++// src/api/rolesApi.js
++import apiClient from './client';
++
++export async function fetchRoles() {
++  const { data } = await apiClient.get('/roles');
++  return data.data; // [{ id, name, is_system, user_count, permissions }]
++}
++
++export async function fetchPermissionCatalog() {
++  const { data } = await apiClient.get('/roles/permissions');
++  return data.data; // [{ key, label, description }]
++}
++
++export async function createRole(payload) {
++  const { data } = await apiClient.post('/roles', payload);
++  return data.data;
++}
++
++export async function updateRole(id, payload) {
++  const { data } = await apiClient.patch(`/roles/${id}`, payload);
++  return data.data;
++}
++
++export async function updateRolePermissions(id, permissions) {
++  const { data } = await apiClient.patch(`/roles/${id}/permissions`, { permissions });
++  return data.data;
++}
++
++export async function deleteRole(id) {
++  await apiClient.delete(`/roles/${id}`);
++}
+diff --git a/frontend/src/hooks/useRoles.js b/frontend/src/hooks/useRoles.js
+new file mode 100644
+index 0000000..d2a8dfe
+--- /dev/null
++++ b/frontend/src/hooks/useRoles.js
+@@ -0,0 +1,33 @@
++// src/hooks/useRoles.js
++import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
++import {
++  fetchRoles,
++  fetchPermissionCatalog,
++  createRole,
++  updateRole,
++  updateRolePermissions,
++  deleteRole,
++} from '../api/rolesApi';
++
++export function useRoles() {
++  return useQuery({ queryKey: ['roles'], queryFn: fetchRoles });
++}
++
++export function usePermissionCatalog() {
++  return useQuery({ queryKey: ['permission-catalog'], queryFn: fetchPermissionCatalog });
++}
++
++export function useRoleMutations() {
++  const queryClient = useQueryClient();
++  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['roles'] });
++
++  const create = useMutation({ mutationFn: createRole, onSuccess: invalidate });
++  const update = useMutation({ mutationFn: ({ id, payload }) => updateRole(id, payload), onSuccess: invalidate });
++  const updatePermissions = useMutation({
++    mutationFn: ({ id, permissions }) => updateRolePermissions(id, permissions),
++    onSuccess: invalidate,
++  });
++  const remove = useMutation({ mutationFn: deleteRole, onSuccess: invalidate });
++
++  return { create, update, updatePermissions, remove };
++}
+diff --git a/frontend/src/pages/UserManagementPage.jsx b/frontend/src/pages/UserManagementPage.jsx
+index dada2fe..e77551b 100644
+--- a/frontend/src/pages/UserManagementPage.jsx
++++ b/frontend/src/pages/UserManagementPage.jsx
+@@ -1,26 +1,12 @@
+ // src/pages/UserManagementPage.jsx
+ import { useState } from 'react';
+-import { Plus, Pencil } from 'lucide-react';
++import { Plus, Pencil, Trash2 } from 'lucide-react';
+ import { usePageHeader } from '../contexts/PageHeaderContext';
+ import { useUsers, useUserMutations } from '../hooks/useUsers';
++import { useRoles, usePermissionCatalog, useRoleMutations } from '../hooks/useRoles';
+ import Modal from '../components/Modal';
+ import ToggleSwitch from '../components/ToggleSwitch';
+ 
+-// CATATAN: API spec (03_API_SPECIFICATION.md §11) minta role_id (integer) di
+-// body POST/PATCH /users, tapi tidak ada endpoint GET /roles untuk
+-// enumerasi id-nya, dan GET /users cuma balikin nama role (bukan id).
+-// Karena seed roles di 04_DATABASE_SCHEMA.sql urutannya FIXED
+-// (INSERT INTO roles (name) VALUES ('Admin'), ('Operator') - SERIAL,
+-// jadi Admin=1, Operator=2 di database baru manapun yang migration-nya
+-// dijalankan dari awal), mapping ini di-hardcode di sini. Kalau di masa
+-// depan ada role tambahan (sesuai catatan "role bisa ditambah nanti"),
+-// mapping ini WAJIB disesuaikan atau backend perlu nambah endpoint
+-// GET /roles supaya gak hardcode lagi.
+-const ROLE_OPTIONS = [
+-  { id: 1, name: 'Admin' },
+-  { id: 2, name: 'Operator' },
+-];
+-
+ const emptyForm = { username: '', email: '', password: '', full_name: '', role_id: '' };
+ 
+ function UserFormModal({ initial, onClose }) {
+@@ -32,6 +18,7 @@ function UserFormModal({ initial, onClose }) {
+   );
+   const [errors, setErrors] = useState({});
+   const { create, update } = useUserMutations();
++  const { data: roles = [] } = useRoles();
+   const pending = create.isPending || update.isPending;
+ 
+   async function handleSubmit(e) {
+@@ -112,7 +99,7 @@ function UserFormModal({ initial, onClose }) {
+               required
+             >
+               <option value="">Pilih Role</option>
+-              {ROLE_OPTIONS.map((r) => (
++              {roles.map((r) => (
+                 <option key={r.id} value={r.id}>
+                   {r.name}
+                 </option>
+@@ -138,6 +125,7 @@ function UserFormModal({ initial, onClose }) {
+ function PendingApprovalSection() {
+   const { data: pendingUsers = [], isLoading } = useUsers({ status: 'PENDING' });
+   const { approve, reject } = useUserMutations();
++  const { data: roles = [] } = useRoles();
+   const [roleSelections, setRoleSelections] = useState({});
+   const [error, setError] = useState('');
+ 
+@@ -207,7 +195,7 @@ function PendingApprovalSection() {
+                   onChange={(e) => setRoleSelections({ ...roleSelections, [u.id]: e.target.value })}
+                 >
+                   <option value="">Pilih Role</option>
+-                  {ROLE_OPTIONS.map((r) => (
++                  {roles.map((r) => (
+                     <option key={r.id} value={r.id}>
+                       {r.name}
+                     </option>
+@@ -242,6 +230,194 @@ function PendingApprovalSection() {
+   );
+ }
+ 
++function RoleManagementSection() {
++  const { data: roles = [], isLoading } = useRoles();
++  const { data: permissionCatalog = [] } = usePermissionCatalog();
++  const { create, updatePermissions, remove } = useRoleMutations();
++  const [newRoleName, setNewRoleName] = useState('');
++  const [newRolePerms, setNewRolePerms] = useState([]);
++  const [error, setError] = useState('');
++  const [expandedRoleId, setExpandedRoleId] = useState(null);
++  const [draftPerms, setDraftPerms] = useState({});
++
++  function togglePerm(key, currentList, setter) {
++    setter(currentList.includes(key) ? currentList.filter((k) => k !== key) : [...currentList, key]);
++  }
++
++  async function handleCreate(e) {
++    e.preventDefault();
++    setError('');
++    if (!newRoleName.trim()) return;
++    try {
++      await create.mutateAsync({ name: newRoleName.trim(), permissions: newRolePerms });
++      setNewRoleName('');
++      setNewRolePerms([]);
++    } catch (err) {
++      setError(err.response?.data?.errors?.name || err.response?.data?.message || 'Gagal membuat role');
++    }
++  }
++
++  function startEditPermissions(role) {
++    setExpandedRoleId(role.id);
++    setDraftPerms({ ...draftPerms, [role.id]: role.permissions.includes('*') ? [] : [...role.permissions] });
++  }
++
++  async function saveDraftPermissions(role) {
++    setError('');
++    try {
++      await updatePermissions.mutateAsync({ id: role.id, permissions: draftPerms[role.id] || [] });
++      setExpandedRoleId(null);
++    } catch (err) {
++      setError(err.response?.data?.message || 'Gagal simpan permission');
++    }
++  }
++
++  async function handleDelete(role) {
++    if (!confirm(`Hapus role "${role.name}"? Role ini harus tidak dipakai user manapun.`)) return;
++    setError('');
++    try {
++      await remove.mutateAsync(role.id);
++    } catch (err) {
++      setError(err.response?.data?.message || 'Gagal menghapus role');
++    }
++  }
++
++  return (
++    <div className="panel" style={{ marginBottom: 16 }}>
++      <div className="panel-header">
++        <h2 className="panel-title">Role & Permission</h2>
++      </div>
++
++      {error && (
++        <div className="error-state" style={{ marginBottom: 12, padding: 8, fontSize: 12 }}>
++          {error}
++        </div>
++      )}
++
++      {isLoading && <div className="empty-state">Memuat data...</div>}
++
++      {!isLoading && (
++        <table className="data-table" style={{ marginBottom: 16 }}>
++          <thead>
++            <tr>
++              <th>Nama Role</th>
++              <th className="mono">User</th>
++              <th>Permission</th>
++              <th style={{ width: 140 }}>Aksi</th>
++            </tr>
++          </thead>
++          <tbody>
++            {roles.map((role) => (
++              <tr key={role.id}>
++                <td>
++                  {role.name} {role.is_system && <span className="caption">(bawaan)</span>}
++                </td>
++                <td className="mono">{role.user_count}</td>
++                <td>
++                  {expandedRoleId === role.id ? (
++                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
++                      {permissionCatalog.map((p) => (
++                        <label key={p.key} className="caption" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
++                          <input
++                            type="checkbox"
++                            checked={(draftPerms[role.id] || []).includes(p.key)}
++                            onChange={() =>
++                              togglePerm(p.key, draftPerms[role.id] || [], (v) =>
++                                setDraftPerms({ ...draftPerms, [role.id]: v })
++                              )
++                            }
++                          />
++                          {p.label}
++                        </label>
++                      ))}
++                    </div>
++                  ) : role.name === 'Admin' ? (
++                    <span className="caption">Semua akses (superuser)</span>
++                  ) : (
++                    <span className="caption">
++                      {role.permissions.length > 0
++                        ? role.permissions
++                            .map((k) => permissionCatalog.find((p) => p.key === k)?.label || k)
++                            .join(', ')
++                        : 'Tidak ada akses khusus'}
++                    </span>
++                  )}
++                </td>
++                <td>
++                  {role.name === 'Admin' ? (
++                    '-'
++                  ) : expandedRoleId === role.id ? (
++                    <button
++                      type="button"
++                      className="btn btn-primary"
++                      style={{ padding: '4px 8px', fontSize: 12 }}
++                      onClick={() => saveDraftPermissions(role)}
++                      disabled={updatePermissions.isPending}
++                    >
++                      Simpan
++                    </button>
++                  ) : (
++                    <>
++                      <button
++                        type="button"
++                        className="btn-secondary btn"
++                        style={{ padding: 6, marginRight: 4 }}
++                        onClick={() => startEditPermissions(role)}
++                      >
++                        <Pencil size={13} />
++                      </button>
++                      {!role.is_system && (
++                        <button
++                          type="button"
++                          className="btn-secondary btn"
++                          style={{ padding: 6 }}
++                          onClick={() => handleDelete(role)}
++                        >
++                          <Trash2 size={13} />
++                        </button>
++                      )}
++                    </>
++                  )}
++                </td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      )}
++
++      <form onSubmit={handleCreate}>
++        <div className="caption" style={{ marginBottom: 6 }}>
++          Buat role baru
++        </div>
++        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
++          <input
++            className="form-input"
++            style={{ flex: 1 }}
++            placeholder="mis. Purchasing"
++            value={newRoleName}
++            onChange={(e) => setNewRoleName(e.target.value)}
++          />
++          <button type="submit" className="btn btn-primary" disabled={create.isPending}>
++            {create.isPending ? 'Menyimpan...' : 'Buat Role'}
++          </button>
++        </div>
++        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
++          {permissionCatalog.map((p) => (
++            <label key={p.key} className="caption" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
++              <input
++                type="checkbox"
++                checked={newRolePerms.includes(p.key)}
++                onChange={() => togglePerm(p.key, newRolePerms, setNewRolePerms)}
++              />
++              {p.label}
++            </label>
++          ))}
++        </div>
++      </form>
++    </div>
++  );
++}
++
+ function UserManagementPage() {
+   usePageHeader({
+     title: 'User Management',
+@@ -255,6 +431,7 @@ function UserManagementPage() {
+ 
+   return (
+     <div>
++      <RoleManagementSection />
+       <PendingApprovalSection />
+ 
+       <div className="panel">
