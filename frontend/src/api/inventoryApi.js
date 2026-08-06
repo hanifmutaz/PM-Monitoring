@@ -21,6 +21,11 @@ export async function fetchInventoryMovements(id, params) {
   return data.data;
 }
 
+export async function fetchAllInventoryMovements(params) {
+  const { data } = await apiClient.get('/inventory/movements/all', { params });
+  return data.data; // { items, total, page, limit }
+}
+
 export async function createInventoryItem(payload) {
   const { data } = await apiClient.post('/inventory', payload);
   return data.data;

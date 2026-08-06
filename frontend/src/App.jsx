@@ -10,6 +10,7 @@ import PmPartHistoryPage from './pages/PmPartHistoryPage';
 import PmLineStatusPage from './pages/PmLineStatusPage';
 import PmLineHistoryPage from './pages/PmLineHistoryPage';
 import MasterDataPage from './pages/MasterDataPage';
+import InventoryHistoryPage from './pages/InventoryHistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import UserManagementPage from './pages/UserManagementPage';
 
@@ -27,6 +28,7 @@ function App() {
           <Route path="/pm-line" element={<PmLineStatusPage />} />
           <Route path="/pm-line/history" element={<PmLineHistoryPage />} />
           <Route path="/master-data" element={<MasterDataPage />} />
+          <Route path="/inventory/history" element={<InventoryHistoryPage />} />
 
           <Route element={<ProtectedRoute allowedRoles={['Admin']} />}>
             <Route path="/settings" element={<SettingsPage />} />

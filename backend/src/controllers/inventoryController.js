@@ -25,6 +25,17 @@ const movements = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Success', data });
 });
 
+const allMovements = asyncHandler(async (req, res) => {
+  const { item_id, movement_type, page, limit } = req.query;
+  const data = await inventoryService.listAllMovements({
+    item_id: item_id ? Number(item_id) : undefined,
+    movement_type,
+    page,
+    limit,
+  });
+  res.status(200).json({ success: true, message: 'Success', data });
+});
+
 const create = asyncHandler(async (req, res) => {
   const { valid, errors } = validateCreateItem(req.body);
   if (!valid) throw AppError.badRequest('Validasi gagal', errors);
@@ -69,4 +80,4 @@ const ropStatus = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Success', data });
 });
 
-module.exports = { list, detail, movements, create, update, adjustStock, remove, linkPart, ropStatus };
+module.exports = { list, detail, movements, allMovements, create, update, adjustStock, remove, linkPart, ropStatus };

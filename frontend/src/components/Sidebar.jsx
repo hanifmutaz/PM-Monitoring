@@ -43,6 +43,7 @@ function Sidebar() {
 
         <div className="nav-group-label">Data</div>
         <NavItem to="/master-data">Master Data</NavItem>
+        <NavItem to="/inventory/history">History Inventory</NavItem>
 
         {isAdmin && (
           <>

@@ -10,6 +10,9 @@ router.use(requireAuth);
 // GET - view-only, dibuka untuk semua role yang login
 router.get('/', inventoryController.list);
 router.get('/rop-status', inventoryController.ropStatus);
+// HARUS di atas '/:id' - kalau ditaruh di bawah, '/movements/all' bakal
+// ketangkep sebagai '/:id' dengan id='movements' duluan.
+router.get('/movements/all', inventoryController.allMovements);
 router.get('/:id', inventoryController.detail);
 router.get('/:id/movements', inventoryController.movements);
 

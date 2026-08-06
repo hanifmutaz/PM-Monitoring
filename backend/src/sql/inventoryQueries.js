@@ -133,6 +133,42 @@ async function findMovementsByItem(itemId, { page = 1, limit = 20 } = {}, runner
   return { items: dataResult.rows, total: countResult.rows[0].total, page: Number(page), limit: Number(limit) };
 }
 
+async function findAllMovements({ item_id, movement_type, page = 1, limit = 20 } = {}, runner = db) {
+  const conditions = [];
+  const params = [];
+
+  if (item_id) {
+    params.push(item_id);
+    conditions.push(`m.inventory_item_id = $${params.length}`);
+  }
+  if (movement_type) {
+    params.push(movement_type);
+    conditions.push(`m.movement_type = $${params.length}`);
+  }
+
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const offset = (Number(page) - 1) * Number(limit);
+
+  const countResult = await runner.query(
+    `SELECT COUNT(*)::int AS total FROM inventory_stock_movements m ${where}`,
+    params
+  );
+  const dataParams = [...params, Number(limit), offset];
+  const dataResult = await runner.query(
+    `SELECT m.id, m.inventory_item_id, i.spare_part_number, i.part_name,
+            m.movement_type, m.qty, m.note, m.ref_type, m.ref_id,
+            m.user_id, u.full_name AS user_full_name, m.created_at
+     FROM inventory_stock_movements m
+     JOIN inventory_items i ON i.id = m.inventory_item_id
+     JOIN users u ON u.id = m.user_id
+     ${where}
+     ORDER BY m.created_at DESC
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    dataParams
+  );
+  return { items: dataResult.rows, total: countResult.rows[0].total, page: Number(page), limit: Number(limit) };
+}
+
 async function findPartsByInventoryItem(itemId, runner = db) {
   const result = await runner.query(
     `SELECT p.id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name
@@ -158,5 +194,6 @@ module.exports = {
   countMovements,
   insertMovement,
   findMovementsByItem,
+  findAllMovements,
   findPartsByInventoryItem,
 };

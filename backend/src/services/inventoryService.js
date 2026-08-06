@@ -106,6 +106,10 @@ async function listMovements(itemId, { page, limit }) {
   return inventoryQueries.findMovementsByItem(itemId, { page, limit });
 }
 
+async function listAllMovements({ item_id, movement_type, page, limit }) {
+  return inventoryQueries.findAllMovements({ item_id, movement_type, page, limit });
+}
+
 /**
  * Buat Inventory Item baru. `initial_stock` opsional (Q4: "diawal input
  * manual untuk menyesuaikan stock awal") - kalau diisi > 0, langsung dicatat
@@ -351,6 +355,7 @@ module.exports = {
   listItems,
   getItem,
   listMovements,
+  listAllMovements,
   createItem,
   updateItem,
   adjustStock,
