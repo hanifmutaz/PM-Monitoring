@@ -19,6 +19,49 @@ const CATEGORY_META = {
   inventory: { no: 9, title: 'Inventory (ROP & Safety Stock)', icon: Package },
 };
 
+// Label manusiawi per setting key — settingnya sendiri fixed catalog dari
+// migration (bukan dibuat dinamis lewat UI), jadi cukup static map di sini
+// tanpa perlu tambah kolom `label` ke tabel app_settings.
+const SETTING_LABELS = {
+  // Threshold PM Part
+  pm_part_danger_multiplier: 'Pengali Danger',
+  pm_part_warning_multiplier: 'Pengali Warning',
+  pm_part_counter_include_reject: 'Reject Dihitung sebagai Shot Terpakai',
+  // Skema Poin PM Monthly
+  pm_monthly_point_full_run: 'Poin Full Run',
+  pm_monthly_point_half_run: 'Poin Half Run',
+  pm_monthly_point_cap: 'Batas Maksimal Poin',
+  pm_monthly_min_run_count_full: 'Ambang Running untuk Full Poin',
+  // Threshold Monthly & Weekly
+  pm_monthly_danger_days: 'Batas Hari Danger (Monthly)',
+  pm_monthly_warning_days: 'Batas Hari Warning (Monthly)',
+  pm_weekly_total_days: 'Siklus PM Weekly',
+  pm_weekly_danger_days: 'Batas Hari Danger (Weekly)',
+  pm_weekly_warning_days: 'Batas Hari Warning (Weekly)',
+  // Relasi Monthly <-> Weekly
+  auto_reset_weekly_on_monthly: 'Auto-Reset Weekly saat Monthly',
+  // Sync Data Produksi
+  sync_interval_minutes: 'Interval Sync ke ConMas',
+  sync_lookback_days: 'Rentang Hari Cache Sync',
+  // Dashboard & Tampilan
+  dashboard_upcoming_pm_limit: 'Jumlah Item Upcoming PM',
+  dashboard_default_view: 'Filter Default Dashboard',
+  // User & Role
+  session_timeout_minutes: 'Timeout Sesi (Idle)',
+  allow_operator_edit_master_data: 'Operator Boleh Edit Master Data',
+  // Notifikasi
+  notif_pm_part_enabled: 'Notifikasi Email PM Part',
+  notif_pm_part_recipient_roles: 'Role Penerima Notifikasi PM Part',
+  notif_pm_part_interval_hours: 'Jeda Reminder PM Part (jam)',
+  notif_pm_part_repeat: 'Ulangi Reminder PM Part',
+  notif_inventory_enabled: 'Notifikasi Email Inventory',
+  notif_inventory_recipient_roles: 'Role Penerima Notifikasi Inventory',
+  notif_inventory_interval_hours: 'Jeda Reminder Inventory (jam)',
+  notif_inventory_repeat: 'Ulangi Reminder Inventory',
+  // Inventory
+  inventory_safety_stock_percentage: 'Persentase Safety Stock',
+};
+
 function SettingRow({ setting }) {
   const updateMutation = useUpdateSetting();
   const [localValue, setLocalValue] = useState(setting.value);
@@ -50,10 +93,13 @@ function SettingRow({ setting }) {
       }}
     >
       <div style={{ minWidth: 0 }}>
-        <div className="mono" style={{ fontSize: 13 }}>
-          {setting.key}
+        <div style={{ fontSize: 13, fontWeight: 500 }}>
+          {SETTING_LABELS[setting.key] || setting.key}
         </div>
         {setting.description && <div className="caption">{setting.description}</div>}
+        <div className="mono" style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 2 }}>
+          {setting.key}
+        </div>
         {error && <div style={{ color: 'var(--danger)', fontSize: 11, marginTop: 2 }}>{error}</div>}
       </div>
 
