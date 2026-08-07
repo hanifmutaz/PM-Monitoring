@@ -13,7 +13,7 @@ import Pagination from '../components/Pagination';
 const LIMIT = 20;
 
 function PmPartMonitoringPage() {
-  usePageHeader({ title: 'Monitoring Part' });
+  usePageHeader({ title: 'Monitoring PM Part' });
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');

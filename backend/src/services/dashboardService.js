@@ -145,4 +145,57 @@ async function getSyncStatus() {
   };
 }
 
-module.exports = { getSummary, getAttention, getUpcoming, getSyncStatus };
+// --- Dashboard khusus per domain (dipisah dari getSummary/getAttention yang
+// nyampur Part + Line, buat halaman "Dashboard PM Part" & "Dashboard PM
+// Monthly and Weekly" yang masing-masing cuma nampilin domainnya sendiri) ---
+
+async function getPartSummary() {
+  const partMetrics = await getCachedPartMetrics();
+
+  const statusCounts = { OK: 0, WARNING: 0, DANGER: 0 };
+  for (const p of partMetrics) statusCounts[p.status] += 1;
+
+  const perLine = {};
+  for (const p of partMetrics) {
+    if (!perLine[p.line_name]) perLine[p.line_name] = { line_name: p.line_name, OK: 0, WARNING: 0, DANGER: 0 };
+    perLine[p.line_name][p.status] += 1;
+  }
+
+  const topAttention = partMetrics
+    .filter((p) => p.status === 'WARNING' || p.status === 'DANGER')
+    .sort((a, b) => a.remaining_shot - b.remaining_shot)
+    .slice(0, 10);
+
+  return {
+    total_parts: partMetrics.length,
+    status_ok: statusCounts.OK,
+    status_warning: statusCounts.WARNING,
+    status_danger: statusCounts.DANGER,
+    per_line: Object.values(perLine).sort((a, b) => b.DANGER - a.DANGER || b.WARNING - a.WARNING),
+    top_attention: topAttention,
+  };
+}
+
+async function getLineSummary() {
+  const lineStatuses = await getCachedLineStatuses();
+
+  const monthlyBuckets = { OK: 0, WARNING: 0, DANGER: 0 };
+  const weeklyBuckets = { OK: 0, WARNING: 0, DANGER: 0 };
+  for (const l of lineStatuses) {
+    monthlyBuckets[l.status_monthly] += 1;
+    weeklyBuckets[l.status_weekly] += 1;
+  }
+
+  const attention = lineStatuses
+    .filter((l) => l.status_monthly !== 'OK' || l.status_weekly !== 'OK')
+    .sort((a, b) => worstStatus(b.status_monthly, b.status_weekly) === 'DANGER' ? 1 : -1);
+
+  return {
+    total_lines: lineStatuses.length,
+    monthly: monthlyBuckets,
+    weekly: weeklyBuckets,
+    attention,
+  };
+}
+
+module.exports = { getSummary, getAttention, getUpcoming, getSyncStatus, getPartSummary, getLineSummary };

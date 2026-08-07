@@ -9,7 +9,7 @@ import CriticalAlertsPanel from '../components/CriticalAlertsPanel';
 import GanttUpcomingPanel from '../components/GanttUpcomingPanel';
 
 function DashboardPage() {
-  usePageHeader({ title: 'Dashboard' });
+  usePageHeader({ title: 'Dashboard Management' });
 
   const { data: summary, isLoading: loadingSummary, isError: errorSummary } = useDashboardSummary();
   const { data: attention = [], isLoading: loadingAttention } = useDashboardAttention();

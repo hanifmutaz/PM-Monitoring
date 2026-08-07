@@ -1,31 +1,11 @@
 // src/pages/PmLineStatusPage.jsx
-import { useState } from 'react';
-import { Plus, X } from 'lucide-react';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { usePmLineStatus } from '../hooks/usePmLineStatus';
-import PmLineHistoryForm from '../components/PmLineHistoryForm';
 import StatusBadge from '../components/StatusBadge';
 import Banner from '../components/Banner';
 
 function PmLineStatusPage() {
-  const [showForm, setShowForm] = useState(false);
-
-  usePageHeader({
-    title: 'Monthly & Weekly',
-    actions: (
-      <button type="button" className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
-        {showForm ? (
-          <>
-            <X size={14} style={{ verticalAlign: -2, marginRight: 4 }} /> Tutup Form
-          </>
-        ) : (
-          <>
-            <Plus size={14} style={{ verticalAlign: -2, marginRight: 4 }} /> Input PM
-          </>
-        )}
-      </button>
-    ),
-  });
+  usePageHeader({ title: 'Monitoring PM Monthly and Weekly' });
 
   const { data, isLoading, isError } = usePmLineStatus({});
 
@@ -35,14 +15,6 @@ function PmLineStatusPage() {
         Status Monthly dihitung dari akumulasi poin (cap 30), status Weekly murni hitung mundur kalender 7 hari.
         Reset Monthly bisa ikut nge-reset Weekly tergantung setting <code className="mono">auto_reset_weekly_on_monthly</code>.
       </Banner>
-
-      {showForm && (
-        <PmLineHistoryForm
-          onSuccess={() => {
-            setShowForm(false);
-          }}
-        />
-      )}
 
       <div className="panel">
         {isError && <div className="error-state">Gagal memuat status Line. Coba lagi.</div>}

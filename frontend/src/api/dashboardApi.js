@@ -20,3 +20,13 @@ export async function fetchSyncStatus() {
   const { data } = await apiClient.get('/dashboard/sync-status');
   return data.data;
 }
+
+export async function fetchPartSummary() {
+  const { data } = await apiClient.get('/dashboard/part-summary');
+  return data.data;
+}
+
+export async function fetchLineSummary() {
+  const { data } = await apiClient.get('/dashboard/line-summary');
+  return data.data;
+}

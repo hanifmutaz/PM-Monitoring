@@ -1,5 +1,5 @@
 // src/components/LineStatusDonut.jsx
-function LineStatusDonut({ healthy = 0, warning = 0, critical = 0 }) {
+function LineStatusDonut({ healthy = 0, warning = 0, critical = 0, totalLabel = 'Total Line' }) {
   const total = healthy + warning + critical;
   const pct = (n) => (total > 0 ? (n / total) * 100 : 0);
 
@@ -40,7 +40,7 @@ function LineStatusDonut({ healthy = 0, warning = 0, critical = 0 }) {
           }}
         >
           <div className="kpi-value">{total}</div>
-          <div className="caption">Total Line</div>
+          <div className="caption">{totalLabel}</div>
         </div>
       </div>
 

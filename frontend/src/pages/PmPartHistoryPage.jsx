@@ -1,37 +1,19 @@
 // src/pages/PmPartHistoryPage.jsx
 import { useState } from 'react';
-import { Plus, X } from 'lucide-react';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { usePmPartHistoryList } from '../hooks/usePmPartHistory';
 import { useLines } from '../hooks/useLines';
-import PmPartHistoryForm from '../components/PmPartHistoryForm';
 import Pagination from '../components/Pagination';
 
 const LIMIT = 20;
 const JENIS_LABEL = { TERJADWAL: 'Terjadwal', PM_EARLY: 'PM Early', BROKEN: 'Broken' };
 
 function PmPartHistoryPage() {
-  const [showForm, setShowForm] = useState(false);
   const [lineId, setLineId] = useState('');
   const [jenis, setJenis] = useState('');
   const [page, setPage] = useState(1);
 
-  usePageHeader({
-    title: 'History Penggantian',
-    actions: (
-      <button type="button" className="btn btn-primary" onClick={() => setShowForm((v) => !v)}>
-        {showForm ? (
-          <>
-            <X size={14} style={{ verticalAlign: -2, marginRight: 4 }} /> Tutup Form
-          </>
-        ) : (
-          <>
-            <Plus size={14} style={{ verticalAlign: -2, marginRight: 4 }} /> Input Penggantian
-          </>
-        )}
-      </button>
-    ),
-  });
+  usePageHeader({ title: 'History PM Part' });
 
   const { data: lines = [] } = useLines({ isActive: true });
   const { data, isLoading, isError } = usePmPartHistoryList({
@@ -43,15 +25,6 @@ function PmPartHistoryPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {showForm && (
-        <PmPartHistoryForm
-          onSuccess={() => {
-            setShowForm(false);
-            setPage(1);
-          }}
-        />
-      )}
-
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <select
           className="form-select"

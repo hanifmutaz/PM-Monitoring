@@ -22,4 +22,14 @@ const syncStatus = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Success', data });
 });
 
-module.exports = { summary, attention, upcoming, syncStatus };
+const partSummary = asyncHandler(async (req, res) => {
+  const data = await dashboardService.getPartSummary();
+  res.status(200).json({ success: true, message: 'Success', data });
+});
+
+const lineSummary = asyncHandler(async (req, res) => {
+  const data = await dashboardService.getLineSummary();
+  res.status(200).json({ success: true, message: 'Success', data });
+});
+
+module.exports = { summary, attention, upcoming, syncStatus, partSummary, lineSummary };
