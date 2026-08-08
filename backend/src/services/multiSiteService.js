@@ -57,11 +57,14 @@ async function fetchSite(site) {
 
 // Data lokasi Internal sendiri diambil langsung dari dashboardService (gak
 // perlu HTTP call ke diri sendiri) supaya bentuk responsenya konsisten
-// dengan hasil dari Subcont.
+// dengan hasil dari Subcont. Field-nya HARUS sinkron sama reportingController.js
+// - kalau nambah field di situ, tambahin juga di sini.
 async function getOwnSiteAsRemoteShape() {
-  const [summary, attention, lineSummary, partSummary] = await Promise.all([
+  const [summary, attention, upcoming, ketepatanAttention, lineSummary, partSummary] = await Promise.all([
     dashboardService.getSummary(),
     dashboardService.getAttention(),
+    dashboardService.getUpcoming(),
+    dashboardService.getKetepatanAttention(),
     dashboardService.getLineSummary(),
     dashboardService.getPartSummary(),
   ]);
@@ -76,6 +79,8 @@ async function getOwnSiteAsRemoteShape() {
       generated_at: new Date().toISOString(),
       summary,
       attention,
+      upcoming,
+      ketepatan_attention: ketepatanAttention,
       line_summary: lineSummary,
       part_summary: partSummary,
     },

@@ -17,6 +17,11 @@ module.exports = [
                 Buffer: 'readonly',
                 setTimeout: 'readonly',
                 setInterval: 'readonly',
+                clearTimeout: 'readonly',
+                // Dipakai multiSiteService.js buat narik data Subcont (built-in
+                // Node 18+, gak butuh dependency tambahan kayak axios/node-fetch).
+                fetch: 'readonly',
+                AbortController: 'readonly',
             },
         },
         rules: {

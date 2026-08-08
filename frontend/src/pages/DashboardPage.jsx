@@ -1,16 +1,20 @@
 // src/pages/DashboardPage.jsx
+import { useState } from 'react';
 import { Package, Factory, AlertTriangle, ShieldAlert, Target, TrendingDown } from 'lucide-react';
 import { usePageHeader } from '../contexts/PageHeaderContext';
+import { useAuth } from '../contexts/AuthContext';
 import { useDashboardSummary } from '../hooks/useDashboardSummary';
 import {
   useDashboardAttention,
   useDashboardUpcoming,
   useDashboardKetepatanAttention,
+  useDashboardMultiSite,
 } from '../hooks/useDashboardExtras';
 import KpiCard from '../components/KpiCard';
 import LineStatusDonut from '../components/LineStatusDonut';
 import CriticalAlertsPanel from '../components/CriticalAlertsPanel';
 import GanttUpcomingPanel from '../components/GanttUpcomingPanel';
+import SiteSwitcher from '../components/SiteSwitcher';
 
 function formatKetepatan(percentage) {
   return percentage === null || percentage === undefined ? '-' : `${percentage}%`;
@@ -37,9 +41,10 @@ function badgeClassFor(percentage) {
   return 'badge badge-danger';
 }
 
-function KetepatanAttentionPanel() {
-  const { data = [], isLoading } = useDashboardKetepatanAttention();
-
+// Diubah jadi terima data lewat props (bukan manggil hook sendiri) supaya
+// bisa dipakai buat data lokal MAUPUN data site lain hasil switcher - satu
+// komponen, dua sumber data.
+function KetepatanAttentionPanel({ data = [], isLoading }) {
   if (isLoading) return null;
 
   return (
@@ -92,16 +97,61 @@ function KetepatanAttentionPanel() {
 function DashboardPage() {
   usePageHeader({ title: 'Dashboard Management' });
 
-  const { data: summary, isLoading: loadingSummary, isError: errorSummary } = useDashboardSummary();
-  const { data: attention = [], isLoading: loadingAttention } = useDashboardAttention();
-  const { data: upcoming = [], isLoading: loadingUpcoming } = useDashboardUpcoming();
+  const { hasPermission } = useAuth();
+  const canSwitchSite = hasPermission('dashboard.multi_site');
+
+  // Site switcher: cuma nembak /dashboard/multi-site kalau user punya
+  // permission-nya (kalau gak, query di-skip total - lihat useDashboardMultiSite).
+  // `sites` kosong di instance Subcont atau kalau REMOTE_SITE_* belum
+  // dikonfigurasi - SiteSwitcher otomatis gak render apa-apa dalam kondisi itu.
+  const { data: multiSite } = useDashboardMultiSite({ enabled: canSwitchSite });
+  const sites = multiSite ?? [];
+  const [selectedSiteId, setSelectedSiteId] = useState(null);
+
+  // selectedSiteId null = belum pernah klik tab = tetap pakai data lokal
+  // (endpoint asli, cepat, gak nunggu multi-site query). Baru begitu user
+  // klik salah satu tab (termasuk tab "Internal" sendiri), sumber data
+  // pindah ke hasil /dashboard/multi-site.
+  const remoteSite = selectedSiteId ? sites.find((s) => s.site_id === selectedSiteId) : null;
+  const isRemoteView = !!remoteSite;
+
+  const localSummary = useDashboardSummary();
+  const localAttention = useDashboardAttention();
+  const localUpcoming = useDashboardUpcoming();
+  const localKetepatan = useDashboardKetepatanAttention();
+
+  const summary = isRemoteView ? remoteSite.data?.summary : localSummary.data;
+  const attention = isRemoteView ? remoteSite.data?.attention ?? [] : localAttention.data ?? [];
+  const upcoming = isRemoteView ? remoteSite.data?.upcoming ?? [] : localUpcoming.data ?? [];
+  const ketepatanAttention = isRemoteView
+    ? remoteSite.data?.ketepatan_attention ?? []
+    : localKetepatan.data ?? [];
+
+  const loadingSummary = isRemoteView ? false : localSummary.isLoading;
+  const errorSummary = isRemoteView ? false : localSummary.isError;
 
   if (errorSummary) {
     return <div className="error-state">Gagal memuat data dashboard. Coba lagi.</div>;
   }
 
+  // Site remote dipilih tapi belum pernah berhasil ditarik sama sekali
+  // (status 'unreachable' + data null) - gak ada apa-apa buat ditampilin.
+  if (isRemoteView && !remoteSite.data) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <SiteSwitcher sites={sites} selectedSiteId={selectedSiteId} onChange={setSelectedSiteId} />
+        <div className="empty-state">
+          Belum pernah berhasil narik data dari {remoteSite.site_label}.
+          {remoteSite.error && ` (${remoteSite.error})`}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <SiteSwitcher sites={sites} selectedSiteId={selectedSiteId} onChange={setSelectedSiteId} />
+
       {loadingSummary ? (
         <div className="kpi-grid">
           {[1, 2, 3, 4].map((i) => (
@@ -186,7 +236,10 @@ function DashboardPage() {
         )}
       </div>
 
-      <KetepatanAttentionPanel />
+      <KetepatanAttentionPanel
+        data={ketepatanAttention}
+        isLoading={isRemoteView ? false : localKetepatan.isLoading}
+      />
 
       <div className="panel">
         <div className="panel-header">
@@ -202,8 +255,8 @@ function DashboardPage() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        {!loadingAttention && <CriticalAlertsPanel items={attention} />}
-        {!loadingUpcoming && <GanttUpcomingPanel items={upcoming} />}
+        {!(isRemoteView ? false : localAttention.isLoading) && <CriticalAlertsPanel items={attention} />}
+        {!(isRemoteView ? false : localUpcoming.isLoading) && <GanttUpcomingPanel items={upcoming} />}
       </div>
     </div>
   );

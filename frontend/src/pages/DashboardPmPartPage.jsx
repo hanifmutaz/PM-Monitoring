@@ -1,22 +1,53 @@
 // src/pages/DashboardPmPartPage.jsx
+import { useState } from 'react';
 import { Package, CheckCircle2, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { usePageHeader } from '../contexts/PageHeaderContext';
-import { useDashboardPartSummary } from '../hooks/useDashboardExtras';
+import { useAuth } from '../contexts/AuthContext';
+import { useDashboardPartSummary, useDashboardMultiSite } from '../hooks/useDashboardExtras';
 import KpiCard from '../components/KpiCard';
 import LineStatusDonut from '../components/LineStatusDonut';
 import CriticalAlertsPanel from '../components/CriticalAlertsPanel';
+import SiteSwitcher from '../components/SiteSwitcher';
 
 function DashboardPmPartPage() {
     usePageHeader({ title: 'Dashboard PM Part' });
 
-    const { data, isLoading, isError } = useDashboardPartSummary();
+    const { hasPermission } = useAuth();
+    const canSwitchSite = hasPermission('dashboard.multi_site');
+
+    const { data: multiSite } = useDashboardMultiSite({ enabled: canSwitchSite });
+    const sites = multiSite ?? [];
+    const [selectedSiteId, setSelectedSiteId] = useState(null);
+
+    const remoteSite = selectedSiteId ? sites.find((s) => s.site_id === selectedSiteId) : null;
+    const isRemoteView = !!remoteSite;
+
+    const local = useDashboardPartSummary();
+
+    const data = isRemoteView ? remoteSite.data?.part_summary : local.data;
+    const isLoading = isRemoteView ? false : local.isLoading;
+    const isError = isRemoteView ? false : local.isError;
 
     if (isError) {
         return <div className="error-state">Gagal memuat dashboard PM Part. Coba lagi.</div>;
     }
 
+    if (isRemoteView && !remoteSite.data) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <SiteSwitcher sites={sites} selectedSiteId={selectedSiteId} onChange={setSelectedSiteId} />
+                <div className="empty-state">
+                    Belum pernah berhasil narik data dari {remoteSite.site_label}.
+                    {remoteSite.error && ` (${remoteSite.error})`}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <SiteSwitcher sites={sites} selectedSiteId={selectedSiteId} onChange={setSelectedSiteId} />
+
             {isLoading ? (
                 <div className="kpi-grid">
                     {[1, 2, 3, 4].map((i) => (

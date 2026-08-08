@@ -7,7 +7,6 @@ import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import DashboardPmPartPage from './pages/DashboardPmPartPage';
 import DashboardPmLineWeeklyPage from './pages/DashboardPmLineWeeklyPage';
-import DashboardMultiSitePage from './pages/DashboardMultiSitePage';
 import PmPartMonitoringPage from './pages/PmPartMonitoringPage';
 import PmPartFormPage from './pages/PmPartFormPage';
 import PmPartHistoryPage from './pages/PmPartHistoryPage';
@@ -31,10 +30,6 @@ function App() {
           <Route path="/" element={<DashboardPage />} />
           <Route path="/dashboard/pm-part" element={<DashboardPmPartPage />} />
           <Route path="/dashboard/pm-line" element={<DashboardPmLineWeeklyPage />} />
-
-          <Route element={<ProtectedRoute requiredPermission="dashboard.multi_site" />}>
-            <Route path="/dashboard/multi-site" element={<DashboardMultiSitePage />} />
-          </Route>
 
           <Route path="/pm-part" element={<PmPartMonitoringPage />} />
           <Route path="/pm-part/form" element={<PmPartFormPage />} />
