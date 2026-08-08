@@ -13,7 +13,7 @@ function NavItem({ to, children, badgeCount }) {
 }
 
 function Sidebar() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, hasPermission } = useAuth();
   const { data: summary } = useDashboardSummary();
 
   return (
@@ -31,6 +31,9 @@ function Sidebar() {
         <NavItem to="/">Dashboard Management</NavItem>
         <NavItem to="/dashboard/pm-part">Dashboard PM Part</NavItem>
         <NavItem to="/dashboard/pm-line">Dashboard PM Monthly and Weekly</NavItem>
+        {hasPermission('dashboard.multi_site') && (
+          <NavItem to="/dashboard/multi-site">Dashboard Multi-Lokasi</NavItem>
+        )}
 
         <div className="nav-group-label">PM Part</div>
         <NavItem to="/pm-part" badgeCount={summary?.status_danger}>

@@ -35,6 +35,14 @@ export function AuthProvider({ children }) {
     loading,
     isAuthenticated: !!user,
     isAdmin: user?.role === 'Admin',
+    // Admin selalu ['*'] dari backend (lihat authService.getMe/login) - cek
+    // includes('*') dulu sebelum cek permission spesifik, sama pola dengan
+    // permissionMiddleware.js di backend. Ini cuma buat UX (sembunyiin
+    // menu/route), backend tetap penegak utama lewat requirePermission().
+    hasPermission: (key) => {
+      const permissions = user?.permissions || [];
+      return permissions.includes('*') || permissions.includes(key);
+    },
     login,
     logout,
   };

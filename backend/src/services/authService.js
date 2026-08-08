@@ -2,6 +2,7 @@
 const bcrypt = require('bcrypt');
 const db = require('../config/db');
 const userQueries = require('../sql/userQueries');
+const permissionQueries = require('../sql/permissionQueries');
 const loginAuditQueries = require('../sql/loginAuditQueries');
 const { signToken } = require('../utils/jwt');
 const { validatePassword } = require('../utils/passwordPolicy');
@@ -72,9 +73,19 @@ async function login(username, password, context = {}) {
     role: user.role_name,
   };
 
+  // userPayload di atas itu JUGA claims yang di-sign ke JWT (lihat
+  // signToken() di bawah) - SENGAJA tidak dibubuhi permissions di situ,
+  // konsisten dengan authMiddleware.js yang resolve permission per-request
+  // dari DB (bukan dari token) supaya perubahan permission oleh Admin
+  // langsung berlaku tanpa perlu re-login. `permissions` di bawah ini
+  // CUMA buat body response login (dipakai frontend gating menu/route),
+  // gak pernah masuk ke token.
+  const permissions =
+    user.role_name === 'Admin' ? ['*'] : await permissionQueries.findPermissionKeysByRoleId(user.role_id);
+
   const token = signToken(userPayload);
 
-  return { token, user: userPayload };
+  return { token, user: { ...userPayload, permissions } };
 }
 
 /**
@@ -132,11 +143,19 @@ async function getMe(userId) {
     throw AppError.unauthorized('User tidak ditemukan atau tidak aktif');
   }
 
+  // Sama logikanya dengan authMiddleware.js - Admin bypass semua permission
+  // check (['*']), role lain resolve dari role_permissions. Frontend butuh
+  // ini buat nyembunyiin menu/route yang gak bisa diakses (UX doang - backend
+  // tetap penegak utama lewat requirePermission() middleware).
+  const permissions =
+    user.role_name === 'Admin' ? ['*'] : await permissionQueries.findPermissionKeysByRoleId(user.role_id);
+
   return {
     id: user.id,
     username: user.username,
     full_name: user.full_name,
     role: user.role_name,
+    permissions,
   };
 }
 

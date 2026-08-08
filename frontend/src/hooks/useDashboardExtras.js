@@ -6,6 +6,7 @@ import {
   fetchPartSummary,
   fetchLineSummary,
   fetchKetepatanAttention,
+  fetchMultiSite,
 } from '../api/dashboardApi';
 
 export function useDashboardAttention() {
@@ -26,4 +27,19 @@ export function useDashboardLineSummary() {
 
 export function useDashboardKetepatanAttention() {
   return useQuery({ queryKey: ['dashboard', 'ketepatan-attention'], queryFn: fetchKetepatanAttention });
+}
+
+// Refetch tiap 60 detik - halaman ini kemungkinan dibuka lama pas meeting
+// review, dan datanya sendiri gak realtime (Internal narik data Subcont
+// per-request, bukan push). retry: false karena kalau 1 Subcont down,
+// backend UDAH handle itu di level multiSiteService (balikin status
+// 'unreachable' + HTTP 200) - retry di sini cuma relevan buat error
+// jaringan/permission (403) yang emang gak akan berubah kalau di-retry.
+export function useDashboardMultiSite() {
+  return useQuery({
+    queryKey: ['dashboard', 'multi-site'],
+    queryFn: fetchMultiSite,
+    refetchInterval: 60_000,
+    retry: false,
+  });
 }

@@ -1,0 +1,414 @@
+diff --git a/backend/migrations/1700000013000_add-multi-site-dashboard-permission.sql b/backend/migrations/1700000013000_add-multi-site-dashboard-permission.sql
+new file mode 100644
+index 0000000..59be5d1
+--- /dev/null
++++ b/backend/migrations/1700000013000_add-multi-site-dashboard-permission.sql
+@@ -0,0 +1,18 @@
++-- 1700000013000_add-multi-site-dashboard-permission.sql
++--
++-- Permission baru buat GET /dashboard/multi-site (endpoint yang narik data
++-- Subcont dari instance Internal - lihat multiSiteService.js). Sengaja
++-- dibuat sebagai permission granular (bukan hardcode Admin-only kayak
++-- Settings/User Management) karena ini fitur observability biasa, bukan
++-- sesuatu yang mengubah data sensitif - manager/supervisor non-Admin wajar
++-- kalau dikasih akses lihat cross-site.
++--
++-- TIDAK di-seed ke role manapun secara default (termasuk Operator) - Admin
++-- yang assign manual lewat UI Role Management ke role yang emang butuh liat
++-- dashboard gabungan 3 lokasi. Admin sendiri selalu bypass otomatis lewat
++-- middleware requirePermission() (lihat migration 011), gak perlu row di
++-- role_permissions.
++
++INSERT INTO permissions (key, label, description) VALUES
++('dashboard.multi_site', 'Lihat Dashboard Multi-Lokasi', 'Akses ringkasan gabungan Internal + Subcont (SGP & Systech) di satu layar')
++ON CONFLICT (key) DO NOTHING;
+diff --git a/backend/src/routes/dashboardRoutes.js b/backend/src/routes/dashboardRoutes.js
+index 625913c..b14c669 100644
+--- a/backend/src/routes/dashboardRoutes.js
++++ b/backend/src/routes/dashboardRoutes.js
+@@ -2,6 +2,7 @@
+ const express = require('express');
+ const dashboardController = require('../controllers/dashboardController');
+ const requireAuth = require('../middlewares/authMiddleware');
++const requirePermission = require('../middlewares/permissionMiddleware');
+ 
+ const router = express.Router();
+ 
+@@ -15,6 +16,11 @@ router.get('/sync-status', dashboardController.syncStatus);
+ router.get('/part-summary', dashboardController.partSummary);
+ router.get('/line-summary', dashboardController.lineSummary);
+ router.get('/ketepatan-attention', dashboardController.ketepatanAttention);
+-router.get('/multi-site', dashboardController.multiSite);
++
++// Beda dari endpoint lain di atas (yang view-only buat semua user login) -
++// ini butuh permission granular 'dashboard.multi_site' karena narik data
++// dari Subcont lain, gak semua role perlu/pantas liat itu. Admin selalu
++// bypass otomatis (lihat permissionMiddleware.js).
++router.get('/multi-site', requirePermission('dashboard.multi_site'), dashboardController.multiSite);
+ 
+ module.exports = router;
+\ No newline at end of file
+diff --git a/backend/src/services/authService.js b/backend/src/services/authService.js
+index 2810e75..cdcacc0 100644
+--- a/backend/src/services/authService.js
++++ b/backend/src/services/authService.js
+@@ -2,6 +2,7 @@
+ const bcrypt = require('bcrypt');
+ const db = require('../config/db');
+ const userQueries = require('../sql/userQueries');
++const permissionQueries = require('../sql/permissionQueries');
+ const loginAuditQueries = require('../sql/loginAuditQueries');
+ const { signToken } = require('../utils/jwt');
+ const { validatePassword } = require('../utils/passwordPolicy');
+@@ -72,9 +73,19 @@ async function login(username, password, context = {}) {
+     role: user.role_name,
+   };
+ 
++  // userPayload di atas itu JUGA claims yang di-sign ke JWT (lihat
++  // signToken() di bawah) - SENGAJA tidak dibubuhi permissions di situ,
++  // konsisten dengan authMiddleware.js yang resolve permission per-request
++  // dari DB (bukan dari token) supaya perubahan permission oleh Admin
++  // langsung berlaku tanpa perlu re-login. `permissions` di bawah ini
++  // CUMA buat body response login (dipakai frontend gating menu/route),
++  // gak pernah masuk ke token.
++  const permissions =
++    user.role_name === 'Admin' ? ['*'] : await permissionQueries.findPermissionKeysByRoleId(user.role_id);
++
+   const token = signToken(userPayload);
+ 
+-  return { token, user: userPayload };
++  return { token, user: { ...userPayload, permissions } };
+ }
+ 
+ /**
+@@ -132,11 +143,19 @@ async function getMe(userId) {
+     throw AppError.unauthorized('User tidak ditemukan atau tidak aktif');
+   }
+ 
++  // Sama logikanya dengan authMiddleware.js - Admin bypass semua permission
++  // check (['*']), role lain resolve dari role_permissions. Frontend butuh
++  // ini buat nyembunyiin menu/route yang gak bisa diakses (UX doang - backend
++  // tetap penegak utama lewat requirePermission() middleware).
++  const permissions =
++    user.role_name === 'Admin' ? ['*'] : await permissionQueries.findPermissionKeysByRoleId(user.role_id);
++
+   return {
+     id: user.id,
+     username: user.username,
+     full_name: user.full_name,
+     role: user.role_name,
++    permissions,
+   };
+ }
+ 
+diff --git a/frontend/src/App.jsx b/frontend/src/App.jsx
+index df83211..f5d5675 100644
+--- a/frontend/src/App.jsx
++++ b/frontend/src/App.jsx
+@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage';
+ import DashboardPage from './pages/DashboardPage';
+ import DashboardPmPartPage from './pages/DashboardPmPartPage';
+ import DashboardPmLineWeeklyPage from './pages/DashboardPmLineWeeklyPage';
++import DashboardMultiSitePage from './pages/DashboardMultiSitePage';
+ import PmPartMonitoringPage from './pages/PmPartMonitoringPage';
+ import PmPartFormPage from './pages/PmPartFormPage';
+ import PmPartHistoryPage from './pages/PmPartHistoryPage';
+@@ -31,6 +32,10 @@ function App() {
+           <Route path="/dashboard/pm-part" element={<DashboardPmPartPage />} />
+           <Route path="/dashboard/pm-line" element={<DashboardPmLineWeeklyPage />} />
+ 
++          <Route element={<ProtectedRoute requiredPermission="dashboard.multi_site" />}>
++            <Route path="/dashboard/multi-site" element={<DashboardMultiSitePage />} />
++          </Route>
++
+           <Route path="/pm-part" element={<PmPartMonitoringPage />} />
+           <Route path="/pm-part/form" element={<PmPartFormPage />} />
+           <Route path="/pm-part/history" element={<PmPartHistoryPage />} />
+diff --git a/frontend/src/api/authApi.js b/frontend/src/api/authApi.js
+index a7a86f3..4261117 100644
+--- a/frontend/src/api/authApi.js
++++ b/frontend/src/api/authApi.js
+@@ -3,7 +3,7 @@ import apiClient from './client';
+ 
+ export async function login(username, password) {
+   const { data } = await apiClient.post('/auth/login', { username, password });
+-  return data.data; // { token, user }
++  return data.data; // { token, user: { id, username, full_name, role, permissions } }
+ }
+ 
+ export async function register(payload) {
+@@ -17,5 +17,5 @@ export async function logout() {
+ 
+ export async function fetchMe() {
+   const { data } = await apiClient.get('/auth/me');
+-  return data.data; // { id, username, full_name, role }
++  return data.data; // { id, username, full_name, role, permissions }
+ }
+diff --git a/frontend/src/api/dashboardApi.js b/frontend/src/api/dashboardApi.js
+index c716340..8d81df7 100644
+--- a/frontend/src/api/dashboardApi.js
++++ b/frontend/src/api/dashboardApi.js
+@@ -34,4 +34,12 @@ export async function fetchLineSummary() {
+ export async function fetchKetepatanAttention() {
+   const { data } = await apiClient.get('/dashboard/ketepatan-attention');
+   return data.data;
++}
++
++// Butuh permission 'dashboard.multi_site' - kalau backend balikin 403 (role
++// gak punya akses), biarkan error itu naik apa adanya, ditangani di hook/page
++// (bukan di-swallow di sini).
++export async function fetchMultiSite() {
++  const { data } = await apiClient.get('/dashboard/multi-site');
++  return data.data;
+ }
+\ No newline at end of file
+diff --git a/frontend/src/components/Sidebar.jsx b/frontend/src/components/Sidebar.jsx
+index b6e0677..39640b4 100644
+--- a/frontend/src/components/Sidebar.jsx
++++ b/frontend/src/components/Sidebar.jsx
+@@ -13,7 +13,7 @@ function NavItem({ to, children, badgeCount }) {
+ }
+ 
+ function Sidebar() {
+-  const { user, logout, isAdmin } = useAuth();
++  const { user, logout, isAdmin, hasPermission } = useAuth();
+   const { data: summary } = useDashboardSummary();
+ 
+   return (
+@@ -31,6 +31,9 @@ function Sidebar() {
+         <NavItem to="/">Dashboard Management</NavItem>
+         <NavItem to="/dashboard/pm-part">Dashboard PM Part</NavItem>
+         <NavItem to="/dashboard/pm-line">Dashboard PM Monthly and Weekly</NavItem>
++        {hasPermission('dashboard.multi_site') && (
++          <NavItem to="/dashboard/multi-site">Dashboard Multi-Lokasi</NavItem>
++        )}
+ 
+         <div className="nav-group-label">PM Part</div>
+         <NavItem to="/pm-part" badgeCount={summary?.status_danger}>
+diff --git a/frontend/src/components/SiteStatusBadge.jsx b/frontend/src/components/SiteStatusBadge.jsx
+new file mode 100644
+index 0000000..ec99bb4
+--- /dev/null
++++ b/frontend/src/components/SiteStatusBadge.jsx
+@@ -0,0 +1,23 @@
++// src/components/SiteStatusBadge.jsx
++// Sengaja komponen TERPISAH dari StatusBadge.jsx - itu buat status Part/Line
++// (OK/WARNING/DANGER, arti "kondisi part/mesin"), ini buat status koneksi
++// ke site lain (ok/stale/unreachable, arti "seberapa segar datanya"). Beda
++// makna walau visualnya mirip, jadi gak dipaksa 1 komponen. Reuse class
++// badge/dot yang sudah ada di components.css - gak nambah CSS baru.
++const CONFIG = {
++  ok: { label: 'Live', className: 'badge badge-ok' },
++  stale: { label: 'Data Lama', className: 'badge badge-warning' },
++  unreachable: { label: 'Gak Terhubung', className: 'badge badge-danger' },
++};
++
++function SiteStatusBadge({ status }) {
++  const config = CONFIG[status] || { label: status, className: 'badge badge-muted' };
++  return (
++    <span className={config.className}>
++      <span className="dot" />
++      {config.label}
++    </span>
++  );
++}
++
++export default SiteStatusBadge;
+diff --git a/frontend/src/contexts/AuthContext.jsx b/frontend/src/contexts/AuthContext.jsx
+index d32961d..4277970 100644
+--- a/frontend/src/contexts/AuthContext.jsx
++++ b/frontend/src/contexts/AuthContext.jsx
+@@ -35,6 +35,14 @@ export function AuthProvider({ children }) {
+     loading,
+     isAuthenticated: !!user,
+     isAdmin: user?.role === 'Admin',
++    // Admin selalu ['*'] dari backend (lihat authService.getMe/login) - cek
++    // includes('*') dulu sebelum cek permission spesifik, sama pola dengan
++    // permissionMiddleware.js di backend. Ini cuma buat UX (sembunyiin
++    // menu/route), backend tetap penegak utama lewat requirePermission().
++    hasPermission: (key) => {
++      const permissions = user?.permissions || [];
++      return permissions.includes('*') || permissions.includes(key);
++    },
+     login,
+     logout,
+   };
+diff --git a/frontend/src/hooks/useDashboardExtras.js b/frontend/src/hooks/useDashboardExtras.js
+index 493d4b0..c9c7319 100644
+--- a/frontend/src/hooks/useDashboardExtras.js
++++ b/frontend/src/hooks/useDashboardExtras.js
+@@ -6,6 +6,7 @@ import {
+   fetchPartSummary,
+   fetchLineSummary,
+   fetchKetepatanAttention,
++  fetchMultiSite,
+ } from '../api/dashboardApi';
+ 
+ export function useDashboardAttention() {
+@@ -26,4 +27,19 @@ export function useDashboardLineSummary() {
+ 
+ export function useDashboardKetepatanAttention() {
+   return useQuery({ queryKey: ['dashboard', 'ketepatan-attention'], queryFn: fetchKetepatanAttention });
++}
++
++// Refetch tiap 60 detik - halaman ini kemungkinan dibuka lama pas meeting
++// review, dan datanya sendiri gak realtime (Internal narik data Subcont
++// per-request, bukan push). retry: false karena kalau 1 Subcont down,
++// backend UDAH handle itu di level multiSiteService (balikin status
++// 'unreachable' + HTTP 200) - retry di sini cuma relevan buat error
++// jaringan/permission (403) yang emang gak akan berubah kalau di-retry.
++export function useDashboardMultiSite() {
++  return useQuery({
++    queryKey: ['dashboard', 'multi-site'],
++    queryFn: fetchMultiSite,
++    refetchInterval: 60_000,
++    retry: false,
++  });
+ }
+\ No newline at end of file
+diff --git a/frontend/src/pages/DashboardMultiSitePage.jsx b/frontend/src/pages/DashboardMultiSitePage.jsx
+new file mode 100644
+index 0000000..6d046d0
+--- /dev/null
++++ b/frontend/src/pages/DashboardMultiSitePage.jsx
+@@ -0,0 +1,107 @@
++// src/pages/DashboardMultiSitePage.jsx
++import dayjs from 'dayjs';
++import 'dayjs/locale/id';
++import { Package, Factory, AlertTriangle, ShieldAlert } from 'lucide-react';
++import { usePageHeader } from '../contexts/PageHeaderContext';
++import { useDashboardMultiSite } from '../hooks/useDashboardExtras';
++import KpiCard from '../components/KpiCard';
++import SiteStatusBadge from '../components/SiteStatusBadge';
++
++dayjs.locale('id');
++
++function formatFetchedAt(iso) {
++  if (!iso) return 'Belum pernah berhasil ditarik';
++  return `Update terakhir ${dayjs(iso).format('DD MMM YYYY, HH:mm')}`;
++}
++
++function SiteSummaryPanel({ site }) {
++  const summary = site.data?.summary;
++
++  return (
++    <div className="panel">
++      <div className="panel-header">
++        <h2 className="panel-title">{site.site_label}</h2>
++        <SiteStatusBadge status={site.status} />
++      </div>
++      <div className="caption" style={{ marginTop: -8, marginBottom: 16 }}>
++        {formatFetchedAt(site.fetched_at)}
++        {site.status === 'stale' &&
++          ' — nampilin data terakhir yang berhasil ditarik, koneksi lokasi ini lagi bermasalah'}
++      </div>
++
++      {!summary && (
++        <div className="empty-state">
++          Belum pernah berhasil narik data dari lokasi ini.
++          {site.error && ` (${site.error})`}
++        </div>
++      )}
++
++      {summary && (
++        <div className="kpi-grid">
++          <KpiCard
++            icon={<Package size={18} />}
++            label="Total Parts"
++            value={summary.total_parts.toLocaleString('id-ID')}
++            caption={`${summary.status_ok} OK`}
++            status="accent"
++          />
++          <KpiCard
++            icon={<Factory size={18} />}
++            label="Active Lines"
++            value={summary.active_lines}
++            caption={`${summary.lines_healthy} sehat`}
++            status="accent"
++          />
++          <KpiCard
++            icon={<AlertTriangle size={18} />}
++            label="Part Butuh Perhatian"
++            value={summary.status_warning + summary.status_danger}
++            caption={`${summary.status_danger} danger, ${summary.status_warning} warning`}
++            status="warn"
++          />
++          <KpiCard
++            icon={<ShieldAlert size={18} />}
++            label="Line Kritis"
++            value={summary.lines_critical}
++            caption={`${summary.lines_warning} perlu perhatian`}
++            status="danger"
++          />
++        </div>
++      )}
++    </div>
++  );
++}
++
++function DashboardMultiSitePage() {
++  usePageHeader({ title: 'Dashboard Multi-Lokasi' });
++
++  const { data: sites = [], isLoading, isError, error } = useDashboardMultiSite();
++
++  if (isError) {
++    // 403 dari backend berarti instance ini BUKAN Internal (endpoint memang
++    // cuma hidup di sana - lihat dashboardController.multiSite) - bedain
++    // pesannya dari error jaringan biasa biar gak membingungkan.
++    const isForbidden = error?.response?.status === 403;
++    return (
++      <div className="error-state">
++        {isForbidden
++          ? 'Dashboard Multi-Lokasi cuma tersedia di instance Internal.'
++          : 'Gagal memuat dashboard multi-lokasi. Coba lagi.'}
++      </div>
++    );
++  }
++
++  if (isLoading) {
++    return <div className="empty-state">Menarik data dari semua lokasi...</div>;
++  }
++
++  return (
++    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
++      {sites.map((site) => (
++        <SiteSummaryPanel key={site.site_id} site={site} />
++      ))}
++    </div>
++  );
++}
++
++export default DashboardMultiSitePage;
+diff --git a/frontend/src/routes/ProtectedRoute.jsx b/frontend/src/routes/ProtectedRoute.jsx
+index 669d306..6b174e1 100644
+--- a/frontend/src/routes/ProtectedRoute.jsx
++++ b/frontend/src/routes/ProtectedRoute.jsx
+@@ -5,11 +5,15 @@ import { useAuth } from '../contexts/AuthContext';
+ /**
+  * @param {string[]} [allowedRoles] - kalau diisi, cuma role ini yang boleh
+  * lewat (mis. ['Admin'] buat Settings & User Management - UI Spec §3.2).
++ * @param {string} [requiredPermission] - kalau diisi, cuma user yang punya
++ * permission key ini (atau Admin) yang boleh lewat (mis. 'dashboard.multi_site').
++ * Beda dari allowedRoles: ini permission granular yang bisa di-assign Admin
++ * ke role manapun lewat UI Role Management, bukan hardcode nama role.
+  * Backend TETAP jadi penegak utama (Dev Rules §12) - ini cuma UX, sembunyiin
+  * menu/route yang emang gak bisa diakses dari sisi tampilan.
+  */
+-function ProtectedRoute({ allowedRoles }) {
+-  const { isAuthenticated, loading, user } = useAuth();
++function ProtectedRoute({ allowedRoles, requiredPermission }) {
++  const { isAuthenticated, loading, user, hasPermission } = useAuth();
+   const location = useLocation();
+ 
+   if (loading) {
+@@ -24,6 +28,10 @@ function ProtectedRoute({ allowedRoles }) {
+     return <Navigate to="/" replace />;
+   }
+ 
++  if (requiredPermission && !hasPermission(requiredPermission)) {
++    return <Navigate to="/" replace />;
++  }
++
+   return <Outlet />;
+ }
+ 

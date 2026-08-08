@@ -26,3 +26,15 @@ Server (production)	isi kredensial SMTP asli
 ADMIN_DEFAULT_*
 Server (production)	cuma kepake sekali doang pas migration pertama kali jalan
 	sama, cuma kepake sekali doang
+
+SITE_ID
+Server (production)	'internal' di server Internal, 'sgp' di server SGP, 'systech' di server Systech
+	boleh isi bebas, gak ngaruh ke dev
+
+REPORTING_API_KEY
+Server (production)	random string, BEDA-BEDA tiap instance (Internal/SGP/Systech punya key masing-masing). Ini yang lo kasih tau ke instance Internal biar bisa narik data dari sini
+	kosongin — endpoint /api/v1/reporting/site-summary otomatis nolak semua request kalau kosong (fail closed), gak masalah buat dev
+
+REMOTE_SITE_1_ID, REMOTE_SITE_1_LABEL, REMOTE_SITE_1_BASE_URL, REMOTE_SITE_1_API_KEY
+Server (production)	CUMA diisi di server Internal. REMOTE_SITE_1_* buat Subcont pertama (misal SGP), REMOTE_SITE_2_* buat Subcont kedua (Systech). BASE_URL = alamat server Subcont itu, API_KEY = REPORTING_API_KEY yang Subcont itu kasih ke lo
+	kosongin — instance dev gak perlu narik data dari mana-mana

@@ -1,5 +1,8 @@
 // src/controllers/dashboardController.js
 const dashboardService = require('../services/dashboardService');
+const multiSiteService = require('../services/multiSiteService');
+const env = require('../config/env');
+const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 
 const summary = asyncHandler(async (req, res) => {
@@ -37,4 +40,26 @@ const ketepatanAttention = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Success', data });
 });
 
-module.exports = { summary, attention, upcoming, syncStatus, partSummary, lineSummary, ketepatanAttention };
+// GET /api/dashboard/multi-site
+// Cuma bermakna di instance Internal (satu-satunya yang boleh narik data
+// Subcont - lihat topologi 1-arah di doc/Architecture.md). Instance Subcont
+// nolak dengan 403 kalau route ini kepanggil, daripada nampilin data kosong
+// yang membingungkan.
+const multiSite = asyncHandler(async (req, res) => {
+  if (env.siteId !== 'internal') {
+    throw AppError.forbidden('Endpoint ini cuma tersedia di instance Internal');
+  }
+  const data = await multiSiteService.getMultiSiteSummary();
+  res.status(200).json({ success: true, message: 'Success', data });
+});
+
+module.exports = {
+  summary,
+  attention,
+  upcoming,
+  syncStatus,
+  partSummary,
+  lineSummary,
+  ketepatanAttention,
+  multiSite,
+};

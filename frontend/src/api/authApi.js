@@ -3,7 +3,7 @@ import apiClient from './client';
 
 export async function login(username, password) {
   const { data } = await apiClient.post('/auth/login', { username, password });
-  return data.data; // { token, user }
+  return data.data; // { token, user: { id, username, full_name, role, permissions } }
 }
 
 export async function register(payload) {
@@ -17,5 +17,5 @@ export async function logout() {
 
 export async function fetchMe() {
   const { data } = await apiClient.get('/auth/me');
-  return data.data; // { id, username, full_name, role }
+  return data.data; // { id, username, full_name, role, permissions }
 }

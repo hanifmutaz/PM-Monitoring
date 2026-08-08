@@ -35,3 +35,11 @@ export async function fetchKetepatanAttention() {
   const { data } = await apiClient.get('/dashboard/ketepatan-attention');
   return data.data;
 }
+
+// Butuh permission 'dashboard.multi_site' - kalau backend balikin 403 (role
+// gak punya akses), biarkan error itu naik apa adanya, ditangani di hook/page
+// (bukan di-swallow di sini).
+export async function fetchMultiSite() {
+  const { data } = await apiClient.get('/dashboard/multi-site');
+  return data.data;
+}

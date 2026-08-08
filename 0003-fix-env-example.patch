@@ -1,0 +1,41 @@
+diff --git a/backend/.env.example b/backend/.env.example
+index 8b7595f..6a97384 100644
+--- a/backend/.env.example
++++ b/backend/.env.example
+@@ -35,6 +35,36 @@ SMTP_FROM=PM Monitoring <no-reply@hirose.local>
+ # Logging
+ LOG_LEVEL=info
+ 
++# Multi-site reporting — identitas lokasi instance ini sendiri.
++# 'internal' di server Internal, 'sgp' di server Subcont SGP, 'systech' di
++# server Subcont Systech. Default 'internal' kalau dikosongkan.
++SITE_ID=internal
++
++# API key milik instance INI SENDIRI — dipakai buat memverifikasi request
++# masuk ke GET /api/v1/reporting/site-summary (dipanggil server lain, BUKAN
++# via login). Kalau dikosongkan, endpoint itu otomatis nolak SEMUA request
++# (fail closed) — aman dikosongkan pas dev kalau gak lagi test fitur ini.
++# Generate: openssl rand -hex 32
++REPORTING_API_KEY=
++
++# CUMA diisi di instance Internal — dipakai multiSiteService buat narik data
++# dari tiap Subcont. BASE_URL = alamat server Subcont, API_KEY = REPORTING_API_KEY
++# milik Subcont itu (dikasih tau manual oleh mereka, BUKAN dari kode). Kosongkan
++# semua REMOTE_SITE_* di instance Subcont (SGP/Systech) — mereka gak perlu ini.
++# REMOTE_SITE_1_ID=sgp
++# REMOTE_SITE_1_LABEL=Subcont SGP
++# REMOTE_SITE_1_BASE_URL=https://sgp.pm-monitoring.internal
++# REMOTE_SITE_1_API_KEY=
++
++# REMOTE_SITE_2_ID=systech
++# REMOTE_SITE_2_LABEL=Subcont Systech
++# REMOTE_SITE_2_BASE_URL=https://systech.pm-monitoring.internal
++# REMOTE_SITE_2_API_KEY=
++
++# Timeout (ms) per-site saat Internal narik data Subcont — biar 1 Subcont
++# yang lemot/down gak nge-hang seluruh request /dashboard/multi-site.
++# REMOTE_SITE_FETCH_TIMEOUT_MS=5000
++
+ # Seed Admin pertama (dipakai oleh migration seed-admin-user, HAPUS/ganti setelah migration jalan sekali)
+ ADMIN_DEFAULT_USERNAME=admin
+ ADMIN_DEFAULT_PASSWORD=ChangeMe123!
