@@ -4,6 +4,7 @@ import { usePageHeader } from '../contexts/PageHeaderContext';
 import { usePmPartHistoryList } from '../hooks/usePmPartHistory';
 import { useLines } from '../hooks/useLines';
 import Pagination from '../components/Pagination';
+import OnTimeBadge from '../components/OnTimeBadge';
 
 const LIMIT = 20;
 const JENIS_LABEL = { TERJADWAL: 'Terjadwal', PM_EARLY: 'PM Early', BROKEN: 'Broken' };
@@ -74,6 +75,8 @@ function PmPartHistoryPage() {
                   <th className="mono">Shift</th>
                   <th className="mono">Counter</th>
                   <th>Jenis</th>
+                  <th>PIC</th>
+                  <th>Ketepatan</th>
                   <th>Remark</th>
                   <th>Oleh</th>
                 </tr>
@@ -91,6 +94,10 @@ function PmPartHistoryPage() {
                     <td className="mono">{item.shift || '-'}</td>
                     <td className="mono">{Number(item.counter_saat_diganti).toLocaleString('id-ID')}</td>
                     <td>{JENIS_LABEL[item.jenis_penggantian]}</td>
+                    <td>{item.pic_name || '-'}</td>
+                    <td>
+                      <OnTimeBadge onTime={item.on_time} />
+                    </td>
                     <td style={{ maxWidth: 200 }}>{item.remark || '-'}</td>
                     <td>{item.user_full_name}</td>
                   </tr>

@@ -4,8 +4,8 @@ const db = require('../config/db');
 const LIST_SELECT = `
   SELECT
     h.id, h.part_id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name,
-    h.tgl_ganti, h.shift, h.counter_saat_diganti, h.jenis_penggantian, h.remark,
-    h.user_id, u.full_name AS user_full_name, h.created_at
+    h.tgl_ganti, h.shift, h.counter_saat_diganti, h.jenis_penggantian, h.remark, h.pic_name,
+    h.on_time, h.user_id, u.full_name AS user_full_name, h.created_at
   FROM pm_part_history h
   JOIN parts p ON p.id = h.part_id
   JOIN lines l ON l.id = p.line_id
@@ -41,8 +41,7 @@ async function findAll({ lineId, partId, jenis, dateFrom, dateTo, page = 1, limi
   const offset = (page - 1) * limit;
 
   const itemsResult = await runner.query(
-    `${LIST_SELECT} ${where} ORDER BY h.tgl_ganti DESC, h.id DESC LIMIT $${params.length + 1} OFFSET $${
-      params.length + 2
+    `${LIST_SELECT} ${where} ORDER BY h.tgl_ganti DESC, h.id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2
     }`,
     [...params, limit, offset]
   );
@@ -68,9 +67,9 @@ async function findPartTargetShot(partId, runner = db) {
 
 async function create(data, runner = db) {
   const result = await runner.query(
-    `INSERT INTO pm_part_history (part_id, tgl_ganti, shift, counter_saat_diganti, jenis_penggantian, remark, user_id, on_time)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING id, part_id, tgl_ganti, shift, counter_saat_diganti, jenis_penggantian, remark, user_id, on_time, created_at`,
+    `INSERT INTO pm_part_history (part_id, tgl_ganti, shift, counter_saat_diganti, jenis_penggantian, remark, pic_name, user_id, on_time)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING id, part_id, tgl_ganti, shift, counter_saat_diganti, jenis_penggantian, remark, pic_name, user_id, on_time, created_at`,
     [
       data.part_id,
       data.tgl_ganti,
@@ -78,6 +77,7 @@ async function create(data, runner = db) {
       data.counter_saat_diganti,
       data.jenis_penggantian,
       data.remark ?? null,
+      data.pic_name,
       data.user_id,
       data.on_time,
     ]

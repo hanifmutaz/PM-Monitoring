@@ -17,6 +17,7 @@
 
 const pmPartQueries = require('../sql/pmPartQueries');
 const clMappingQueries = require('../sql/clMappingQueries');
+const partSupplierQueries = require('../sql/partSupplierQueries');
 const settingsService = require('./settingsService');
 const pmPartHistoryService = require('./pmPartHistoryService');
 const dateUtils = require('../utils/dateUtils');
@@ -64,6 +65,11 @@ function computeMetrics(row, thresholds) {
     estimated_pm_date: estimatedPmDate,
     status,
     wear_percentage: wearPercentage,
+    // "Pesen kemana" - Supplier yang ditandai utama buat part ini (null
+    // kalau belum ada/belum ditandai). Diikutkan di sini (bukan cuma di
+    // detail) karena justru paling kepake pas lagi liat Monitoring dan part
+    // udah DANGER - operator langsung tau kontak siapa tanpa buka halaman lain.
+    primary_supplier_name: row.primary_supplier_name || null,
   };
 }
 
@@ -115,11 +121,13 @@ async function getPmPartDetail(partId) {
 
   const metrics = computeMetrics(row, thresholds);
   const clMappings = await clMappingQueries.findByPartId(partId);
+  const suppliers = await partSupplierQueries.findByPartId(partId);
   const recentHistory = await pmPartQueries.findRecentHistory(partId, 5);
 
   return {
     ...metrics,
     cl_mapping: clMappings,
+    suppliers,
     recent_history: recentHistory.map((h) => ({
       id: h.id,
       tgl_ganti: dateUtils.formatDate(h.tgl_ganti),

@@ -47,7 +47,9 @@ async function findAllWithCounter({ lineId, search, limit, offset } = {}, runner
      SELECT
        p.id AS part_id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name, p.target_shot,
        COALESCE(pcnt.counter, 0) AS counter,
-       plg.last_tgl_ganti
+       plg.last_tgl_ganti,
+       (SELECT s.supplier_name FROM part_suppliers ps JOIN suppliers s ON s.id = ps.supplier_id
+        WHERE ps.part_id = p.id AND ps.is_primary = TRUE LIMIT 1) AS primary_supplier_name
      FROM parts p
      JOIN lines l ON l.id = p.line_id
      LEFT JOIN part_counter pcnt ON pcnt.part_id = p.id
@@ -93,7 +95,9 @@ async function findOneWithCounter(partId, runner = db) {
      SELECT
        p.id AS part_id, p.line_id, l.line_name, p.jig_name, p.drawing_no, p.part_name, p.target_shot,
        COALESCE(pcnt.counter, 0) AS counter,
-       plg.last_tgl_ganti
+       plg.last_tgl_ganti,
+       (SELECT s.supplier_name FROM part_suppliers ps JOIN suppliers s ON s.id = ps.supplier_id
+        WHERE ps.part_id = p.id AND ps.is_primary = TRUE LIMIT 1) AS primary_supplier_name
      FROM parts p
      JOIN lines l ON l.id = p.line_id
      LEFT JOIN part_counter pcnt ON pcnt.part_id = p.id

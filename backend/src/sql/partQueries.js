@@ -7,7 +7,8 @@ const LIST_SELECT = `
     p.spare_part_number, p.spare_part_qty, p.spare_part_location, p.spare_part_note,
     p.inventory_item_id, inv.spare_part_number AS inv_spare_part_number, inv.current_stock AS inv_current_stock,
     p.is_active,
-    (SELECT COUNT(*)::int FROM part_cl_mapping m WHERE m.part_id = p.id) AS cl_count
+    (SELECT COUNT(*)::int FROM part_cl_mapping m WHERE m.part_id = p.id) AS cl_count,
+    (SELECT COUNT(*)::int FROM part_suppliers ps WHERE ps.part_id = p.id) AS supplier_count
   FROM parts p
   JOIN lines l ON l.id = p.line_id
   LEFT JOIN inventory_items inv ON inv.id = p.inventory_item_id

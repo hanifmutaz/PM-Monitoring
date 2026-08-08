@@ -16,6 +16,8 @@ const masterDataImportRoutes = require('./masterDataImportRoutes');
 const inventoryRoutes = require('./inventoryRoutes');
 const roleManagementRoutes = require('./roleManagementRoutes');
 const reportingRoutes = require('./reportingRoutes');
+const supplierRoutes = require('./supplierRoutes');
+const partSupplierRoutes = require('./partSupplierRoutes');
 
 const router = express.Router();
 
@@ -35,5 +37,7 @@ router.use('/master-data-import', masterDataImportRoutes);
 router.use('/inventory', inventoryRoutes);
 router.use('/roles', roleManagementRoutes);
 router.use('/reporting', reportingRoutes);
+router.use('/suppliers', supplierRoutes);
+router.use('/part-suppliers', partSupplierRoutes);
 
 module.exports = router;

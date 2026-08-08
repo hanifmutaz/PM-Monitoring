@@ -8,8 +8,9 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import Modal from '../Modal';
 import SearchBar from '../SearchBar';
 import Pagination from '../Pagination';
+import PageSizeSelector from '../PageSizeSelector';
 
-const LIMIT = 20;
+const DEFAULT_LIMIT = 50;
 
 const emptyForm = { spare_part_number: '', part_name: '', location: '', note: '', lead_time_days: '', initial_stock: '' };
 
@@ -355,12 +356,13 @@ function ItemDetailModal({ itemId, onClose }) {
 function InventoryTab() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [modalState, setModalState] = useState(null);
   const [detailItemId, setDetailItemId] = useState(null);
   const [actionError, setActionError] = useState('');
 
   const debouncedSearch = useDebouncedValue(search);
-  const { data, isLoading } = useInventoryItems({ search: debouncedSearch || undefined, page, limit: LIMIT });
+  const { data, isLoading } = useInventoryItems({ search: debouncedSearch || undefined, page, limit });
   const { data: ropData } = useInventoryRopStatus();
   const { remove } = useInventoryMutations();
 
@@ -384,14 +386,23 @@ function InventoryTab() {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-        <SearchBar
-          value={search}
-          onChange={(v) => {
-            setSearch(v);
-            setPage(1);
-          }}
-          placeholder="Cari spare part number / nama..."
-        />
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <SearchBar
+            value={search}
+            onChange={(v) => {
+              setSearch(v);
+              setPage(1);
+            }}
+            placeholder="Cari spare part number / nama..."
+          />
+          <PageSizeSelector
+            value={limit}
+            onChange={(v) => {
+              setLimit(v);
+              setPage(1);
+            }}
+          />
+        </div>
         <button type="button" className="btn btn-primary" onClick={() => setModalState({ mode: 'create' })}>
           <Plus size={14} style={{ verticalAlign: -2, marginRight: 4 }} /> Tambah Inventory Item
         </button>

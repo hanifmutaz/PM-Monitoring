@@ -28,6 +28,12 @@ function validateCreateHistory(body) {
     errors.jenis_penggantian = `Jenis Penggantian harus salah satu dari: ${JENIS_ENUM.join(', ')}`;
   }
 
+  if (!body || typeof body.pic_name !== 'string' || body.pic_name.trim() === '') {
+    errors.pic_name = 'PIC wajib diisi';
+  } else if (body.pic_name.length > 150) {
+    errors.pic_name = 'PIC maksimal 150 karakter';
+  }
+
   return { valid: Object.keys(errors).length === 0, errors };
 }
 

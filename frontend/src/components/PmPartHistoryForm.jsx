@@ -19,6 +19,7 @@ const emptyForm = {
   shift: '',
   counter_saat_diganti: '',
   jenis_penggantian: 'TERJADWAL',
+  pic_name: '',
   remark: '',
 };
 
@@ -67,6 +68,7 @@ function PmPartHistoryForm({ onSuccess, onCancel, presetPart }) {
         shift: form.shift ? Number(form.shift) : undefined,
         counter_saat_diganti: Number(form.counter_saat_diganti),
         jenis_penggantian: form.jenis_penggantian,
+        pic_name: form.pic_name,
         remark: form.remark || undefined,
       });
       setForm(buildInitialForm(presetPart));
@@ -189,6 +191,19 @@ function PmPartHistoryForm({ onSuccess, onCancel, presetPart }) {
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="form-label">PIC</label>
+          <input
+            className="form-input"
+            style={{ width: '100%' }}
+            value={form.pic_name}
+            onChange={(e) => update('pic_name', e.target.value)}
+            placeholder="Nama yang mengerjakan"
+            required
+          />
+          {errors.pic_name && <span style={{ color: 'var(--danger)', fontSize: 11 }}>{errors.pic_name}</span>}
         </div>
 
         <div style={{ gridColumn: '1 / -1' }}>

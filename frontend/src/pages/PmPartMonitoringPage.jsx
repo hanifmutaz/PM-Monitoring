@@ -1,5 +1,6 @@
 // src/pages/PmPartMonitoringPage.jsx
 import { useState } from 'react';
+import { Truck } from 'lucide-react';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { usePmPartList, usePmPartKetepatanPerLine } from '../hooks/usePmPartList';
 import { useLines } from '../hooks/useLines';
@@ -147,6 +148,15 @@ function PmPartMonitoringPage() {
                       <div className="caption mono">
                         {item.drawing_no} <span className="caption">({item.jig_name})</span>
                       </div>
+                      {item.primary_supplier_name ? (
+                        <div className="caption" style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                          <Truck size={11} /> {item.primary_supplier_name}
+                        </div>
+                      ) : (
+                        <div className="caption" style={{ color: 'var(--text-faint)', marginTop: 2 }}>
+                          Belum ada Supplier utama
+                        </div>
+                      )}
                     </td>
                     <td className="mono">{item.counter.toLocaleString('id-ID')}</td>
                     <td className="mono">{item.target_shot.toLocaleString('id-ID')}</td>

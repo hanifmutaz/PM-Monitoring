@@ -9,6 +9,7 @@ const emptyForm = {
   line_id: '',
   jenis_pm: 'MONTHLY',
   tgl_input: todayStr(),
+  pic_name: '',
   keterangan: '',
 };
 
@@ -50,6 +51,7 @@ function PmLineHistoryForm({ onSuccess, onCancel, presetLine, presetJenisPm }) {
         line_id: Number(form.line_id),
         jenis_pm: form.jenis_pm,
         tgl_input: form.tgl_input,
+        pic_name: form.pic_name,
         keterangan: form.keterangan || undefined,
       });
       setForm(buildInitialForm(presetLine, presetJenisPm));
@@ -115,6 +117,19 @@ function PmLineHistoryForm({ onSuccess, onCancel, presetLine, presetJenisPm }) {
             required
           />
           {errors.tgl_input && <span style={{ color: 'var(--danger)', fontSize: 11 }}>{errors.tgl_input}</span>}
+        </div>
+
+        <div>
+          <label className="form-label">PIC</label>
+          <input
+            className="form-input"
+            style={{ width: '100%' }}
+            value={form.pic_name}
+            onChange={(e) => update('pic_name', e.target.value)}
+            placeholder="Nama yang mengerjakan"
+            required
+          />
+          {errors.pic_name && <span style={{ color: 'var(--danger)', fontSize: 11 }}>{errors.pic_name}</span>}
         </div>
 
         <div style={{ gridColumn: '1 / -1' }}>

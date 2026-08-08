@@ -6,6 +6,7 @@ import { usePmLineHistoryList } from '../hooks/usePmLineHistory';
 import { useLines } from '../hooks/useLines';
 import PmLineHistoryForm from '../components/PmLineHistoryForm';
 import Pagination from '../components/Pagination';
+import OnTimeBadge from '../components/OnTimeBadge';
 
 const LIMIT = 20;
 const JENIS_LABEL = { MONTHLY: 'Monthly', WEEKLY: 'Weekly' };
@@ -99,6 +100,8 @@ function PmLineHistoryPage() {
                   <th className="mono">Tanggal</th>
                   <th>Line</th>
                   <th>Jenis</th>
+                  <th>PIC</th>
+                  <th>Ketepatan</th>
                   <th>Keterangan</th>
                   <th>Oleh</th>
                 </tr>
@@ -109,6 +112,10 @@ function PmLineHistoryPage() {
                     <td className="mono">{item.tgl_input}</td>
                     <td className="mono">{item.line_name}</td>
                     <td>{JENIS_LABEL[item.jenis_pm]}</td>
+                    <td>{item.pic_name || '-'}</td>
+                    <td>
+                      <OnTimeBadge onTime={item.on_time} />
+                    </td>
                     <td style={{ maxWidth: 240 }}>{item.keterangan || '-'}</td>
                     <td>{item.user_full_name}</td>
                   </tr>

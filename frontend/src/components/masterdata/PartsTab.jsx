@@ -1,6 +1,6 @@
 // src/components/masterdata/PartsTab.jsx
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Link2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Link2, Truck } from 'lucide-react';
 import { useParts } from '../../hooks/useParts';
 import { usePartMutations } from '../../hooks/usePartMutations';
 import { useLines } from '../../hooks/useLines';
@@ -10,9 +10,11 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue';
 import Modal from '../Modal';
 import SearchBar from '../SearchBar';
 import Pagination from '../Pagination';
+import PageSizeSelector from '../PageSizeSelector';
 import ClMappingModal from './ClMappingModal';
+import PartSupplierModal from './PartSupplierModal';
 
-const LIMIT = 20;
+const DEFAULT_LIMIT = 50;
 
 const emptyForm = {
   line_id: '',
@@ -248,8 +250,10 @@ function PartsTab() {
   const [search, setSearch] = useState('');
   const [lineId, setLineId] = useState('');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
   const [modalState, setModalState] = useState(null);
   const [clMappingPart, setClMappingPart] = useState(null);
+  const [supplierPart, setSupplierPart] = useState(null);
   const [deleteError, setDeleteError] = useState('');
 
   const debouncedSearch = useDebouncedValue(search);
@@ -258,7 +262,7 @@ function PartsTab() {
     search: debouncedSearch || undefined,
     line_id: lineId || undefined,
     page,
-    limit: LIMIT,
+    limit,
   });
   const { remove } = usePartMutations();
 
@@ -299,6 +303,13 @@ function PartsTab() {
               </option>
             ))}
           </select>
+          <PageSizeSelector
+            value={limit}
+            onChange={(v) => {
+              setLimit(v);
+              setPage(1); // ganti limit -> mulai lagi dari halaman 1, biar gak nyasar ke halaman yang udah gak ada
+            }}
+          />
         </div>
         <button type="button" className="btn btn-primary" onClick={() => setModalState({ mode: 'create' })}>
           <Plus size={14} style={{ verticalAlign: -2, marginRight: 4 }} /> Tambah Part
@@ -324,8 +335,9 @@ function PartsTab() {
                 <th>Drawing No / Part Name</th>
                 <th className="mono">Target Shot</th>
                 <th className="mono">CL Count</th>
+                <th className="mono">Supplier</th>
                 <th>Status</th>
-                <th style={{ width: 130 }}>Aksi</th>
+                <th style={{ width: 160 }}>Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -344,6 +356,7 @@ function PartsTab() {
                   </td>
                   <td className="mono">{part.target_shot.toLocaleString('id-ID')}</td>
                   <td className="mono">{part.cl_count}</td>
+                  <td className="mono">{part.supplier_count}</td>
                   <td className="caption">{part.is_active ? 'Aktif' : 'Nonaktif'}</td>
                   <td>
                     <button
@@ -354,6 +367,15 @@ function PartsTab() {
                       onClick={() => setClMappingPart(part)}
                     >
                       <Link2 size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary btn"
+                      style={{ padding: 6, marginRight: 4 }}
+                      title="Supplier"
+                      onClick={() => setSupplierPart(part)}
+                    >
+                      <Truck size={13} />
                     </button>
                     <button
                       type="button"
@@ -389,6 +411,7 @@ function PartsTab() {
       )}
 
       {clMappingPart && <ClMappingModal part={clMappingPart} onClose={() => setClMappingPart(null)} />}
+      {supplierPart && <PartSupplierModal part={supplierPart} onClose={() => setSupplierPart(null)} />}
     </div>
   );
 }

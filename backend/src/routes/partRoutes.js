@@ -2,6 +2,7 @@
 const express = require('express');
 const partController = require('../controllers/partController');
 const clMappingController = require('../controllers/clMappingController');
+const partSupplierController = require('../controllers/partSupplierController');
 const requireAuth = require('../middlewares/authMiddleware');
 const requireRole = require('../middlewares/roleMiddleware');
 const requireMasterDataEditAccess = require('../middlewares/masterDataAccess');
@@ -25,6 +26,12 @@ router.get('/:partId/cl-mapping', requireRole('Admin', 'Operator'), clMappingCon
 
 // Part-CL Mapping (nested) - POST: sama seperti POST /parts
 router.post('/:partId/cl-mapping', requireMasterDataEditAccess, clMappingController.create);
+
+// Part-Supplier (nested) - daftar supplier per Part, "pesen kemana buat
+// part ini" - akses sama persis dengan cl-mapping di atas (master data
+// relasi, bukan transaksi).
+router.get('/:partId/suppliers', requireRole('Admin', 'Operator'), partSupplierController.list);
+router.post('/:partId/suppliers', requireMasterDataEditAccess, partSupplierController.create);
 
 // Link/unlink Part ke Inventory Item - dianggap Master Data (konfigurasi
 // relasi, bukan transaksi stok) - sama akses dengan edit Part.

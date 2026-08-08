@@ -2,7 +2,7 @@
 const db = require('../config/db');
 
 const LIST_SELECT = `
-  SELECT h.id, h.line_id, l.line_name, h.tgl_input, h.jenis_pm, h.keterangan,
+  SELECT h.id, h.line_id, l.line_name, h.tgl_input, h.jenis_pm, h.keterangan, h.pic_name, h.on_time,
          h.user_id, u.full_name AS user_full_name, h.created_at
   FROM pm_monthly_history h
   JOIN lines l ON l.id = h.line_id
@@ -34,8 +34,7 @@ async function findAll({ lineId, jenis, dateFrom, dateTo, page = 1, limit = 20 }
   const offset = (page - 1) * limit;
 
   const itemsResult = await runner.query(
-    `${LIST_SELECT} ${where} ORDER BY h.tgl_input DESC, h.id DESC LIMIT $${params.length + 1} OFFSET $${
-      params.length + 2
+    `${LIST_SELECT} ${where} ORDER BY h.tgl_input DESC, h.id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2
     }`,
     [...params, limit, offset]
   );
@@ -49,10 +48,10 @@ async function findAll({ lineId, jenis, dateFrom, dateTo, page = 1, limit = 20 }
 
 async function create(data, runner = db) {
   const result = await runner.query(
-    `INSERT INTO pm_monthly_history (line_id, tgl_input, jenis_pm, keterangan, user_id, on_time)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, line_id, tgl_input, jenis_pm, keterangan, user_id, on_time, created_at`,
-    [data.line_id, data.tgl_input, data.jenis_pm, data.keterangan ?? null, data.user_id, data.on_time]
+    `INSERT INTO pm_monthly_history (line_id, tgl_input, jenis_pm, keterangan, pic_name, user_id, on_time)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING id, line_id, tgl_input, jenis_pm, keterangan, pic_name, user_id, on_time, created_at`,
+    [data.line_id, data.tgl_input, data.jenis_pm, data.keterangan ?? null, data.pic_name, data.user_id, data.on_time]
   );
   return result.rows[0];
 }
