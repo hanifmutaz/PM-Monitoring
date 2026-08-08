@@ -36,6 +36,14 @@ function addDaysToToday(days) {
   return today().add(Math.ceil(days), 'day').format(DATE_FORMAT);
 }
 
+/** Selisih hari (bilangan bulat, toDate - fromDate) antara dua tanggal DB. Null kalau salah satu null. */
+function daysBetween(fromDateValue, toDateValue) {
+  const from = parseDbDate(fromDateValue);
+  const to = parseDbDate(toDateValue);
+  if (!from || !to) return null;
+  return dayjs(to.format(DATE_FORMAT)).diff(dayjs(from.format(DATE_FORMAT)), 'day');
+}
+
 function formatDate(dateValue) {
   const d = parseDbDate(dateValue);
   return d ? d.format(DATE_FORMAT) : null;
@@ -45,4 +53,20 @@ function todayString() {
   return today().format(DATE_FORMAT);
 }
 
-module.exports = { today, parseDbDate, daysSince, addDaysToToday, formatDate, todayString, TZ, DATE_FORMAT };
+/** Awal tahun berjalan (WIB) - basis filter "tahun berjalan" untuk fitur Ketepatan PM. */
+function startOfYearString() {
+  return today().startOf('year').format(DATE_FORMAT);
+}
+
+module.exports = {
+  today,
+  parseDbDate,
+  daysSince,
+  daysBetween,
+  addDaysToToday,
+  formatDate,
+  todayString,
+  startOfYearString,
+  TZ,
+  DATE_FORMAT,
+};

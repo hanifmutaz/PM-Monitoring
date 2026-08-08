@@ -32,4 +32,9 @@ const lineSummary = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Success', data });
 });
 
-module.exports = { summary, attention, upcoming, syncStatus, partSummary, lineSummary };
+const ketepatanAttention = asyncHandler(async (req, res) => {
+  const data = await dashboardService.getKetepatanAttention();
+  res.status(200).json({ success: true, message: 'Success', data });
+});
+
+module.exports = { summary, attention, upcoming, syncStatus, partSummary, lineSummary, ketepatanAttention };

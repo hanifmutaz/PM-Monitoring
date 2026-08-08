@@ -36,14 +36,12 @@ function Sidebar() {
         <NavItem to="/pm-part" badgeCount={summary?.status_danger}>
           Monitoring PM Part
         </NavItem>
-        <NavItem to="/pm-part/form">Form/Input PM Part</NavItem>
         <NavItem to="/pm-part/history">History PM Part</NavItem>
 
         <div className="nav-group-label">PM Monthly and Weekly</div>
         <NavItem to="/pm-line" badgeCount={summary?.lines_critical}>
           Monitoring PM Monthly and Weekly
         </NavItem>
-        <NavItem to="/pm-line/form">Form/Input PM Monthly and Weekly</NavItem>
         <NavItem to="/pm-line/history">History PM Monthly and Weekly</NavItem>
 
         <div className="nav-group-label">Data</div>

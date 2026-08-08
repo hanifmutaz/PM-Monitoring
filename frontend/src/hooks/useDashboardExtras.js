@@ -1,6 +1,12 @@
 // src/hooks/useDashboardExtras.js
 import { useQuery } from '@tanstack/react-query';
-import { fetchAttention, fetchUpcoming, fetchPartSummary, fetchLineSummary } from '../api/dashboardApi';
+import {
+  fetchAttention,
+  fetchUpcoming,
+  fetchPartSummary,
+  fetchLineSummary,
+  fetchKetepatanAttention,
+} from '../api/dashboardApi';
 
 export function useDashboardAttention() {
   return useQuery({ queryKey: ['dashboard', 'attention'], queryFn: fetchAttention });
@@ -16,4 +22,8 @@ export function useDashboardPartSummary() {
 
 export function useDashboardLineSummary() {
   return useQuery({ queryKey: ['dashboard', 'line-summary'], queryFn: fetchLineSummary });
+}
+
+export function useDashboardKetepatanAttention() {
+  return useQuery({ queryKey: ['dashboard', 'ketepatan-attention'], queryFn: fetchKetepatanAttention });
 }

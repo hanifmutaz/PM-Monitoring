@@ -12,9 +12,22 @@ const emptyForm = {
   keterangan: '',
 };
 
-function PmLineHistoryForm({ onSuccess }) {
-  const [form, setForm] = useState(emptyForm);
+// presetLine datang dari baris Monitoring yang diklik ("Input Monthly" /
+// "Input Weekly" di baris Line tersebut) supaya operator ga perlu nyari
+// ulang Line yang barusan dia liat statusnya.
+function buildInitialForm(presetLine, presetJenisPm) {
+  if (!presetLine) return emptyForm;
+  return {
+    ...emptyForm,
+    line_id: String(presetLine.line_id ?? ''),
+    jenis_pm: presetJenisPm || 'MONTHLY',
+  };
+}
+
+function PmLineHistoryForm({ onSuccess, onCancel, presetLine, presetJenisPm }) {
+  const [form, setForm] = useState(() => buildInitialForm(presetLine, presetJenisPm));
   const [errors, setErrors] = useState({});
+  const isPrefilled = Boolean(presetLine);
 
   const { data: lines = [] } = useLines({ isActive: true });
   const createMutation = useCreatePmLineHistory();
@@ -39,7 +52,7 @@ function PmLineHistoryForm({ onSuccess }) {
         tgl_input: form.tgl_input,
         keterangan: form.keterangan || undefined,
       });
-      setForm(emptyForm);
+      setForm(buildInitialForm(presetLine, presetJenisPm));
       onSuccess?.();
     } catch (err) {
       setErrors(err.response?.data?.errors || { _general: err.response?.data?.message || 'Gagal menyimpan' });
@@ -47,10 +60,12 @@ function PmLineHistoryForm({ onSuccess }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="panel">
-      <div className="panel-header">
-        <h2 className="panel-title">Input PM Monthly / Weekly</h2>
-      </div>
+    <form onSubmit={handleSubmit} className={isPrefilled ? undefined : 'panel'}>
+      {!isPrefilled && (
+        <div className="panel-header">
+          <h2 className="panel-title">Input PM Monthly / Weekly</h2>
+        </div>
+      )}
 
       <ResetHint jenisPm={form.jenis_pm} />
 
@@ -61,6 +76,7 @@ function PmLineHistoryForm({ onSuccess }) {
             className="form-select"
             style={{ width: '100%' }}
             value={form.line_id}
+            disabled={isPrefilled}
             onChange={(e) => update('line_id', e.target.value)}
           >
             <option value="">Pilih Line</option>
@@ -79,6 +95,7 @@ function PmLineHistoryForm({ onSuccess }) {
             className="form-select"
             style={{ width: '100%' }}
             value={form.jenis_pm}
+            disabled={isPrefilled}
             onChange={(e) => update('jenis_pm', e.target.value)}
           >
             <option value="MONTHLY">Monthly</option>
@@ -117,9 +134,16 @@ function PmLineHistoryForm({ onSuccess }) {
         </div>
       )}
 
-      <button type="submit" className="btn btn-primary" style={{ marginTop: 16 }} disabled={createMutation.isPending}>
-        {createMutation.isPending ? 'Menyimpan...' : 'Simpan'}
-      </button>
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button type="submit" className="btn btn-primary" disabled={createMutation.isPending}>
+          {createMutation.isPending ? 'Menyimpan...' : 'Simpan'}
+        </button>
+        {onCancel && (
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={createMutation.isPending}>
+            Batal
+          </button>
+        )}
+      </div>
     </form>
   );
 }

@@ -60,14 +60,68 @@ async function partExists(partId, runner = db) {
   return !!result.rows[0];
 }
 
+/** Ambil target_shot part - dibutuhkan buat nentuin ketepatan (counter_saat_diganti vs target_shot) sebelum insert history. */
+async function findPartTargetShot(partId, runner = db) {
+  const result = await runner.query(`SELECT target_shot FROM parts WHERE id = $1`, [partId]);
+  return result.rows[0] ? Number(result.rows[0].target_shot) : null;
+}
+
 async function create(data, runner = db) {
   const result = await runner.query(
-    `INSERT INTO pm_part_history (part_id, tgl_ganti, shift, counter_saat_diganti, jenis_penggantian, remark, user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING id, part_id, tgl_ganti, shift, counter_saat_diganti, jenis_penggantian, remark, user_id, created_at`,
-    [data.part_id, data.tgl_ganti, data.shift ?? null, data.counter_saat_diganti, data.jenis_penggantian, data.remark ?? null, data.user_id]
+    `INSERT INTO pm_part_history (part_id, tgl_ganti, shift, counter_saat_diganti, jenis_penggantian, remark, user_id, on_time)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id, part_id, tgl_ganti, shift, counter_saat_diganti, jenis_penggantian, remark, user_id, on_time, created_at`,
+    [
+      data.part_id,
+      data.tgl_ganti,
+      data.shift ?? null,
+      data.counter_saat_diganti,
+      data.jenis_penggantian,
+      data.remark ?? null,
+      data.user_id,
+      data.on_time,
+    ]
   );
   return result.rows[0];
 }
 
-module.exports = { findAll, partExists, create };
+// --- Ketepatan PM Part (lihat pmPartHistoryService.js buat definisi on_time) ---
+
+async function getKetepatanOverall({ dateFrom }, runner = db) {
+  const result = await runner.query(
+    `SELECT
+       COUNT(*) FILTER (WHERE on_time IS NOT NULL) AS total,
+       COUNT(*) FILTER (WHERE on_time = TRUE) AS on_time_count
+     FROM pm_part_history
+     WHERE tgl_ganti >= $1`,
+    [dateFrom]
+  );
+  return result.rows[0];
+}
+
+async function getKetepatanPerLine({ dateFrom }, runner = db) {
+  const result = await runner.query(
+    `SELECT
+       p.line_id,
+       l.line_name,
+       COUNT(*) FILTER (WHERE h.on_time IS NOT NULL) AS total,
+       COUNT(*) FILTER (WHERE h.on_time = TRUE) AS on_time_count
+     FROM pm_part_history h
+     JOIN parts p ON p.id = h.part_id
+     JOIN lines l ON l.id = p.line_id
+     WHERE h.tgl_ganti >= $1
+     GROUP BY p.line_id, l.line_name
+     ORDER BY l.line_name ASC`,
+    [dateFrom]
+  );
+  return result.rows;
+}
+
+module.exports = {
+  findAll,
+  partExists,
+  findPartTargetShot,
+  create,
+  getKetepatanOverall,
+  getKetepatanPerLine,
+};

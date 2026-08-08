@@ -18,6 +18,7 @@
 const pmPartQueries = require('../sql/pmPartQueries');
 const clMappingQueries = require('../sql/clMappingQueries');
 const settingsService = require('./settingsService');
+const pmPartHistoryService = require('./pmPartHistoryService');
 const dateUtils = require('../utils/dateUtils');
 const AppError = require('../utils/AppError');
 
@@ -131,4 +132,11 @@ async function getPmPartDetail(partId) {
   };
 }
 
-module.exports = { listPmPart, getPmPartDetail, getAllComputedMetrics, computeMetrics };
+// Ketepatan PM Part per Line (tahun berjalan) - dipakai halaman Monitoring
+// PM Part yang list-nya per-part, jadi butuh ringkasan per-Line terpisah
+// (lihat pmPartHistoryService.js buat definisi ketepatan on_time).
+async function getKetepatanPerLine() {
+  return pmPartHistoryService.getKetepatanPerLine();
+}
+
+module.exports = { listPmPart, getPmPartDetail, getAllComputedMetrics, computeMetrics, getKetepatanPerLine };

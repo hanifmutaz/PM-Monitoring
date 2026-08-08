@@ -30,3 +30,8 @@ export async function fetchLineSummary() {
   const { data } = await apiClient.get('/dashboard/line-summary');
   return data.data;
 }
+
+export async function fetchKetepatanAttention() {
+  const { data } = await apiClient.get('/dashboard/ketepatan-attention');
+  return data.data;
+}

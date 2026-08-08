@@ -1,6 +1,8 @@
 const dashboardQueries = require('../sql/dashboardQueries');
 const pmPartService = require('./pmPartService');
 const pmLineService = require('./pmLineService');
+const pmPartHistoryService = require('./pmPartHistoryService');
+const pmLineHistoryService = require('./pmLineHistoryService');
 const settingsService = require('./settingsService');
 const dateUtils = require('../utils/dateUtils');
 
@@ -35,11 +37,16 @@ function worstStatus(a, b) {
 }
 
 async function getSummary() {
-  const [partMetrics, lineStatuses, totalParts, activeLines] = await Promise.all([
+  const [partMetrics, lineStatuses, totalParts, activeLines, ketepatanPart, ketepatanLine] = await Promise.all([
     getCachedPartMetrics(),
     getCachedLineStatuses(),
     dashboardQueries.countAllParts(),
     dashboardQueries.countActiveLines(),
+    // Ketepatan PM (tahun berjalan, lihat migration 1700000012000) - angka
+    // akumulasi ringkas buat Dashboard, breakdown per-Line-nya sendiri ada
+    // di halaman Monitoring (pmLineService.getPmLineStatus / pmPartService.getKetepatanPerLine).
+    pmPartHistoryService.getKetepatanSummary(),
+    pmLineHistoryService.getKetepatanSummary(),
   ]);
 
   const statusCounts = { OK: 0, WARNING: 0, DANGER: 0 };
@@ -60,6 +67,12 @@ async function getSummary() {
     lines_healthy: lineBuckets.OK,
     lines_warning: lineBuckets.WARNING,
     lines_critical: lineBuckets.DANGER,
+    ketepatan_pm_part_percentage: ketepatanPart.percentage,
+    ketepatan_pm_part_total: ketepatanPart.total,
+    ketepatan_pm_monthly_percentage: ketepatanLine.monthly.percentage,
+    ketepatan_pm_monthly_total: ketepatanLine.monthly.total,
+    ketepatan_pm_weekly_percentage: ketepatanLine.weekly.percentage,
+    ketepatan_pm_weekly_total: ketepatanLine.weekly.total,
   };
 }
 
@@ -145,6 +158,53 @@ async function getSyncStatus() {
   };
 }
 
+// Ranking Line dengan ketepatan PM paling rendah tahun ini (gabungan Part +
+// Monthly + Weekly, ambil nilai TERBURUK per Line) - buat manager langsung
+// tau Line mana yang perlu ditegur/dibantu tanpa harus buka 2 halaman
+// Monitoring terpisah dan bandingin manual satu-satu.
+const KETEPATAN_ATTENTION_LIMIT = 5;
+
+async function getKetepatanAttention() {
+  const [partPerLine, linePerLine] = await Promise.all([
+    pmPartHistoryService.getKetepatanPerLine(),
+    pmLineHistoryService.getKetepatanPerLine(),
+  ]);
+
+  const merged = new Map();
+  const upsert = (lineId, lineName) => {
+    if (!merged.has(lineId)) {
+      merged.set(lineId, {
+        line_id: lineId,
+        line_name: lineName,
+        part_percentage: null,
+        monthly_percentage: null,
+        weekly_percentage: null,
+      });
+    }
+    return merged.get(lineId);
+  };
+
+  for (const p of partPerLine) {
+    upsert(p.line_id, p.line_name).part_percentage = p.percentage;
+  }
+  for (const l of linePerLine) {
+    const row = upsert(l.line_id, l.line_name);
+    row.monthly_percentage = l.monthly.percentage;
+    row.weekly_percentage = l.weekly.percentage;
+  }
+
+  return Array.from(merged.values())
+    .map((row) => {
+      const values = [row.part_percentage, row.monthly_percentage, row.weekly_percentage].filter(
+        (v) => v !== null && v !== undefined
+      );
+      return { ...row, worst_percentage: values.length ? Math.min(...values) : null };
+    })
+    .filter((row) => row.worst_percentage !== null)
+    .sort((a, b) => a.worst_percentage - b.worst_percentage)
+    .slice(0, KETEPATAN_ATTENTION_LIMIT);
+}
+
 // --- Dashboard khusus per domain (dipisah dari getSummary/getAttention yang
 // nyampur Part + Line, buat halaman "Dashboard PM Part" & "Dashboard PM
 // Monthly and Weekly" yang masing-masing cuma nampilin domainnya sendiri) ---
@@ -198,4 +258,12 @@ async function getLineSummary() {
   };
 }
 
-module.exports = { getSummary, getAttention, getUpcoming, getSyncStatus, getPartSummary, getLineSummary };
+module.exports = {
+  getSummary,
+  getAttention,
+  getUpcoming,
+  getSyncStatus,
+  getPartSummary,
+  getLineSummary,
+  getKetepatanAttention,
+};

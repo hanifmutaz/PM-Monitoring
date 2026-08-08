@@ -9,6 +9,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 router.get('/', pmPartController.list);
+router.get('/ketepatan-per-line', pmPartController.ketepatanPerLine);
 router.get('/:partId', pmPartController.detail);
 
 module.exports = router;

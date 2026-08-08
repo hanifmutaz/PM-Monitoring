@@ -22,9 +22,24 @@ const emptyForm = {
   remark: '',
 };
 
-function PmPartHistoryForm({ onSuccess }) {
-  const [form, setForm] = useState(emptyForm);
+// presetPart datang dari baris Monitoring yang diklik (part_id, line_id belum
+// tentu ada di sana secara eksplisit -- kita ambil dari item hasil query
+// pm-part list, lihat PmPartMonitoringPage). Field ini di-prefill supaya
+// operator ga perlu nyari ulang part yang barusan dia liat statusnya.
+function buildInitialForm(presetPart) {
+  if (!presetPart) return emptyForm;
+  return {
+    ...emptyForm,
+    line_id: String(presetPart.line_id ?? ''),
+    part_id: String(presetPart.part_id ?? ''),
+    counter_saat_diganti: presetPart.counter != null ? String(presetPart.counter) : '',
+  };
+}
+
+function PmPartHistoryForm({ onSuccess, onCancel, presetPart }) {
+  const [form, setForm] = useState(() => buildInitialForm(presetPart));
   const [errors, setErrors] = useState({});
+  const isPrefilled = Boolean(presetPart);
 
   const { data: lines = [] } = useLines({ isActive: true });
   const { data: partsData } = useParts({ line_id: form.line_id || undefined, limit: 200 });
@@ -54,18 +69,23 @@ function PmPartHistoryForm({ onSuccess }) {
         jenis_penggantian: form.jenis_penggantian,
         remark: form.remark || undefined,
       });
-      setForm(emptyForm);
+      setForm(buildInitialForm(presetPart));
       onSuccess?.();
     } catch (err) {
       setErrors(err.response?.data?.errors || { _general: err.response?.data?.message || 'Gagal menyimpan' });
     }
   }
 
+  // Dipakai berdiri sendiri di /pm-part/form (punya panel + judul sendiri)
+  // maupun di dalam Modal dari Monitoring (Modal sudah kasih panel + judul,
+  // jadi wrapper di sini dilewatin biar gak dobel border/padding).
   return (
-    <form onSubmit={handleSubmit} className="panel">
-      <div className="panel-header">
-        <h2 className="panel-title">Input Penggantian Part</h2>
-      </div>
+    <form onSubmit={handleSubmit} className={isPrefilled ? undefined : 'panel'}>
+      {!isPrefilled && (
+        <div className="panel-header">
+          <h2 className="panel-title">Input Penggantian Part</h2>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div>
@@ -74,6 +94,7 @@ function PmPartHistoryForm({ onSuccess }) {
             className="form-select"
             style={{ width: '100%' }}
             value={form.line_id}
+            disabled={isPrefilled}
             onChange={(e) => update('line_id', e.target.value)}
           >
             <option value="">Pilih Line</option>
@@ -91,6 +112,7 @@ function PmPartHistoryForm({ onSuccess }) {
             className="form-select"
             style={{ width: '100%' }}
             value={form.part_id}
+            disabled={isPrefilled}
             onChange={(e) => update('part_id', e.target.value)}
           >
             <option value="">Pilih Part</option>
@@ -101,6 +123,11 @@ function PmPartHistoryForm({ onSuccess }) {
             ))}
           </select>
           {errors.part_id && <span style={{ color: 'var(--danger)', fontSize: 11 }}>{errors.part_id}</span>}
+          {isPrefilled && (
+            <span className="caption" style={{ display: 'block', marginTop: 4 }}>
+              Part dikunci dari Monitoring. Batal dan buka lagi kalau salah pilih baris.
+            </span>
+          )}
         </div>
 
         <div>
@@ -181,14 +208,16 @@ function PmPartHistoryForm({ onSuccess }) {
         </div>
       )}
 
-      <button
-        type="submit"
-        className="btn btn-primary"
-        style={{ marginTop: 16 }}
-        disabled={createMutation.isPending}
-      >
-        {createMutation.isPending ? 'Menyimpan...' : 'Simpan Penggantian'}
-      </button>
+      <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+        <button type="submit" className="btn btn-primary" disabled={createMutation.isPending}>
+          {createMutation.isPending ? 'Menyimpan...' : 'Simpan Penggantian'}
+        </button>
+        {onCancel && (
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={createMutation.isPending}>
+            Batal
+          </button>
+        )}
+      </div>
     </form>
   );
 }

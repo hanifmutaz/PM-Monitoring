@@ -14,5 +14,6 @@ router.get('/upcoming', dashboardController.upcoming);
 router.get('/sync-status', dashboardController.syncStatus);
 router.get('/part-summary', dashboardController.partSummary);
 router.get('/line-summary', dashboardController.lineSummary);
+router.get('/ketepatan-attention', dashboardController.ketepatanAttention);
 
 module.exports = router;

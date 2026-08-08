@@ -23,6 +23,7 @@
 
 const pmLineQueries = require('../sql/pmLineQueries');
 const settingsService = require('./settingsService');
+const pmLineHistoryService = require('./pmLineHistoryService');
 const dateUtils = require('../utils/dateUtils');
 const AppError = require('../utils/AppError');
 
@@ -99,8 +100,26 @@ async function getPmLineStatus({ lineId }) {
     await pmLineQueries.ensureHelperExists(lineId);
   }
 
-  const rows = await pmLineQueries.findAllStatus({ lineId });
-  return rows.map((row) => computeLineStatus(row, thresholds));
+  const [rows, ketepatanPerLine] = await Promise.all([
+    pmLineQueries.findAllStatus({ lineId }),
+    // Ketepatan (tahun berjalan) - fitur terpisah dari status DANGER/WARNING/OK
+    // di atas (formula Bagian 2.B/2.C TIDAK diubah), digabung di sini karena
+    // hasilnya sama-sama "per Line" dan halaman Monitoring butuh keduanya
+    // sekaligus dalam 1 baris tabel.
+    pmLineHistoryService.getKetepatanPerLine(),
+  ]);
+
+  const ketepatanByLineId = new Map(ketepatanPerLine.map((k) => [k.line_id, k]));
+
+  return rows.map((row) => {
+    const status = computeLineStatus(row, thresholds);
+    const ketepatan = ketepatanByLineId.get(row.line_id);
+    return {
+      ...status,
+      ketepatan_monthly_percentage: ketepatan ? ketepatan.monthly.percentage : null,
+      ketepatan_weekly_percentage: ketepatan ? ketepatan.weekly.percentage : null,
+    };
+  });
 }
 
 module.exports = { getPmLineStatus, computeLineStatus, getThresholds, statusFromRemainingDays };

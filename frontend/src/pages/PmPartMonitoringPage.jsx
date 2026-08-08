@@ -1,7 +1,7 @@
 // src/pages/PmPartMonitoringPage.jsx
 import { useState } from 'react';
 import { usePageHeader } from '../contexts/PageHeaderContext';
-import { usePmPartList } from '../hooks/usePmPartList';
+import { usePmPartList, usePmPartKetepatanPerLine } from '../hooks/usePmPartList';
 import { useLines } from '../hooks/useLines';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import WearRing from '../components/WearRing';
@@ -9,8 +9,56 @@ import StatusBadge from '../components/StatusBadge';
 import StatusFilterPills from '../components/StatusFilterPills';
 import SearchBar from '../components/SearchBar';
 import Pagination from '../components/Pagination';
+import Modal from '../components/Modal';
+import PmPartHistoryForm from '../components/PmPartHistoryForm';
 
 const LIMIT = 20;
+
+function ketepatanColor(percentage) {
+  if (percentage === null || percentage === undefined) return 'var(--text-faint)';
+  if (percentage >= 90) return 'var(--ok)';
+  if (percentage >= 50) return 'var(--warn)';
+  return 'var(--danger)';
+}
+
+// Mini-card per Line (bukan chip "Line X: 92%" seperti sebelumnya) - pola
+// chip inline gak konsisten sama badge lain di app ini (badge di sini
+// selalu [dot + 1 kata status], bukan [label: value]). Kartu kecil lebih
+// gampang di-scan sekilas dan null-state-nya jelas beda warna (abu-abu,
+// bukan hijau seolah "bagus").
+function KetepatanPerLinePanel() {
+  const { data, isLoading } = usePmPartKetepatanPerLine();
+
+  if (isLoading || !data || data.length === 0) return null;
+
+  return (
+    <div className="panel" style={{ padding: '12px 16px' }}>
+      <div className="caption" style={{ marginBottom: 10 }}>
+        Ketepatan PM Part per Line (tahun berjalan)
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {data.map((l) => (
+          <div
+            key={l.line_id}
+            style={{
+              background: 'var(--panel-2)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '10px 14px',
+              minWidth: 120,
+            }}
+          >
+            <div className="kpi-label">{l.line_name}</div>
+            <div className="kpi-value" style={{ color: ketepatanColor(l.percentage), fontSize: 22 }}>
+              {l.percentage === null ? '-' : `${l.percentage}%`}
+            </div>
+            <div className="kpi-caption">{l.percentage === null ? 'belum ada data' : `${l.total} event`}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function PmPartMonitoringPage() {
   usePageHeader({ title: 'Monitoring PM Part' });
@@ -19,6 +67,7 @@ function PmPartMonitoringPage() {
   const [status, setStatus] = useState('');
   const [lineId, setLineId] = useState('');
   const [page, setPage] = useState(1);
+  const [gantiPartItem, setGantiPartItem] = useState(null);
 
   const debouncedSearch = useDebouncedValue(search);
   const { data: lines = [] } = useLines({ isActive: true });
@@ -40,6 +89,8 @@ function PmPartMonitoringPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <KetepatanPerLinePanel />
+
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         <SearchBar value={search} onChange={handleFilterChange(setSearch)} placeholder="Cari drawing no / nama part..." />
 
@@ -81,6 +132,7 @@ function PmPartMonitoringPage() {
                   <th className="mono">Sisa Shot</th>
                   <th className="mono">Estimasi PM</th>
                   <th>Status</th>
+                  <th style={{ width: 120 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -103,6 +155,16 @@ function PmPartMonitoringPage() {
                     <td>
                       <StatusBadge status={item.status} />
                     </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 12px', fontSize: 12 }}
+                        onClick={() => setGantiPartItem(item)}
+                      >
+                        Ganti Part
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -112,6 +174,17 @@ function PmPartMonitoringPage() {
           </>
         )}
       </div>
+
+      {gantiPartItem && (
+        <Modal title={`Ganti Part — ${gantiPartItem.drawing_no}`} onClose={() => setGantiPartItem(null)}>
+          <PmPartHistoryForm
+            key={gantiPartItem.part_id}
+            presetPart={gantiPartItem}
+            onCancel={() => setGantiPartItem(null)}
+            onSuccess={() => setGantiPartItem(null)}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

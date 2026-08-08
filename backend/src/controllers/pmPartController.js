@@ -19,4 +19,9 @@ const detail = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Success', data });
 });
 
-module.exports = { list, detail };
+const ketepatanPerLine = asyncHandler(async (req, res) => {
+  const data = await pmPartService.getKetepatanPerLine();
+  res.status(200).json({ success: true, message: 'Success', data });
+});
+
+module.exports = { list, detail, ketepatanPerLine };

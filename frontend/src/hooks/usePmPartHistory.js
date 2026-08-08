@@ -20,6 +20,7 @@ export function useCreatePmPartHistory() {
       // biar UI langsung sinkron, bukan nunggu refetch interval.
       queryClient.invalidateQueries({ queryKey: ['pm-part-history'] });
       queryClient.invalidateQueries({ queryKey: ['pm-part'] });
+      queryClient.invalidateQueries({ queryKey: ['pm-part-ketepatan-per-line'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
