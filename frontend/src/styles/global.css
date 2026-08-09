@@ -1,4 +1,5 @@
 /* src/styles/global.css */
+@import "tailwindcss";
 @import './tokens.css';
 
 * {
@@ -45,17 +46,20 @@ textarea {
   font-weight: 600;
   margin: 0;
 }
+
 .panel-title {
   font-family: var(--font-display);
   font-size: 15px;
   font-weight: 600;
   margin: 0;
 }
+
 .kpi-value {
   font-family: var(--font-display);
   font-size: 30px;
   font-weight: 600;
 }
+
 .table-header-text {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -64,10 +68,12 @@ textarea {
   letter-spacing: 0.5px;
   color: var(--text-faint);
 }
+
 .caption {
   font-size: 11px;
   color: var(--text-faint);
 }
+
 .mono {
   font-family: var(--font-mono);
 }
@@ -128,6 +134,7 @@ textarea {
   .app-shell {
     flex-direction: column;
   }
+
   .sidebar {
     width: 100%;
     height: auto;

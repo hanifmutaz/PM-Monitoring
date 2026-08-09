@@ -38,3 +38,7 @@ Server (production)	random string, BEDA-BEDA tiap instance (Internal/SGP/Systech
 REMOTE_SITE_1_ID, REMOTE_SITE_1_LABEL, REMOTE_SITE_1_BASE_URL, REMOTE_SITE_1_API_KEY
 Server (production)	CUMA diisi di server Internal. REMOTE_SITE_1_* buat Subcont pertama (misal SGP), REMOTE_SITE_2_* buat Subcont kedua (Systech). BASE_URL = alamat server Subcont itu, API_KEY = REPORTING_API_KEY yang Subcont itu kasih ke lo
 	kosongin — instance dev gak perlu narik data dari mana-mana
+
+export PORT=5051
+export SITE_ID=sgp
+export REPORTING_API_KEY=sgp-dev-key-123
