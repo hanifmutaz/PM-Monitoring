@@ -12,6 +12,30 @@ import { Label } from '../components/ui/label';
 // baru pakai Tailwind murni biar redesign ini gak nyenggol tampilan Sidebar
 // yang belum dimigrasi. Semua logic auth (login, redirect, error handling)
 // PERSIS SAMA kayak sebelumnya - cuma markup/styling yang diganti.
+//
+// TIDAK ada "Keep me signed in" atau "Forgot Password?" di sini walaupun
+// lazim ada di template login - backend belum punya fitur itu (session
+// selalu sama durasinya, gak ada endpoint reset password). Nambahin kontrol
+// UI yang gak beneran ngapa-ngapain itu bohong ke user, jadi sengaja dilewatin.
+function BackgroundDecoration() {
+  return (
+    <div className="pointer-events-none fixed inset-0 overflow-hidden">
+      <div
+        className="absolute -left-32 bottom-0 h-[420px] w-[420px] rounded-full opacity-30 blur-3xl"
+        style={{ background: 'var(--accent)' }}
+      />
+      <div
+        className="absolute -left-10 bottom-20 h-[280px] w-[280px] rounded-full opacity-20 blur-3xl"
+        style={{ background: 'var(--ok)' }}
+      />
+      <div
+        className="absolute left-40 -bottom-20 h-[260px] w-[260px] rounded-full opacity-10 blur-3xl"
+        style={{ background: 'var(--danger)' }}
+      />
+    </div>
+  );
+}
+
 function LoginPage() {
   const { login, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
@@ -44,37 +68,33 @@ function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
-      {/* Radial glow halus di belakang card - cuma dekorasi, pakai token
-          warna primary yang udah ada (var(--accent)), bukan warna baru. */}
-      <div
-        className="pointer-events-none absolute inset-0 opacity-40"
-        style={{
-          background: 'radial-gradient(circle at 50% 0%, var(--accent-dim), transparent 60%)',
-        }}
-      />
+    <div className="relative flex min-h-screen items-center justify-center bg-background p-4">
+      <BackgroundDecoration />
 
-      <div className="relative w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-xl font-bold text-primary-foreground shadow-lg shadow-primary/20">
-            H
-          </div>
-          <div>
-            <div className="[font-family:var(--font-display)] text-lg font-semibold text-foreground">
-              PM Monitor
-            </div>
-            <div className="text-sm text-muted-foreground">Hirose Internal</div>
-          </div>
+      {/* Logo di pojok kiri atas halaman - bukan di atas card */}
+      <div className="fixed left-6 top-6 flex items-center gap-2.5">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+          H
+        </div>
+        <span className="[font-family:var(--font-display)] text-base font-semibold text-foreground">
+          PM Monitor
+        </span>
+      </div>
+
+      <div className="relative w-full max-w-[420px] rounded-xl border border-border bg-card p-8 shadow-2xl">
+        <div className="mb-7 flex items-start justify-between">
+          <h1 className="[font-family:var(--font-display)] text-2xl font-bold text-foreground">Login</h1>
+          <Link to="/register" className="mt-2 text-sm text-primary hover:underline">
+            Belum punya akun?
+          </Link>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="flex flex-col gap-5 rounded-xl border border-border bg-card p-8 shadow-2xl"
-        >
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
             <Label htmlFor="username">Username</Label>
             <Input
               id="username"
+              className="h-11"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
@@ -89,7 +109,7 @@ function LoginPage() {
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
-                className="pr-10"
+                className="h-11 pr-10"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
@@ -114,17 +134,10 @@ function LoginPage() {
             </div>
           )}
 
-          <Button type="submit" disabled={submitting} className="w-full">
+          <Button type="submit" disabled={submitting} className="h-11 w-full text-base">
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
             {submitting ? 'Memproses...' : 'Login'}
           </Button>
-
-          <Link
-            to="/register"
-            className="text-center text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            Belum punya akun? <span className="text-primary">Daftar di sini</span>
-          </Link>
         </form>
       </div>
     </div>
