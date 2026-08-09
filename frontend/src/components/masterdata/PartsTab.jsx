@@ -7,6 +7,7 @@ import { useLines } from '../../hooks/useLines';
 import { useInventoryItems } from '../../hooks/useInventoryItems';
 import { useInventoryMutations } from '../../hooks/useInventoryMutations';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useConfirm } from '../../contexts/ConfirmDialogContext';
 import Modal from '../Modal';
 import SearchBar from '../SearchBar';
 import Pagination from '../Pagination';
@@ -265,9 +266,10 @@ function PartsTab() {
     limit,
   });
   const { remove } = usePartMutations();
+  const confirm = useConfirm();
 
   async function handleDelete(part) {
-    if (!confirm(`Hapus Part "${part.drawing_no}" (Jig: ${part.jig_name})?`)) return;
+    if (!(await confirm(`Hapus Part "${part.drawing_no}" (Jig: ${part.jig_name})?`))) return;
     setDeleteError('');
     try {
       await remove.mutateAsync(part.id);

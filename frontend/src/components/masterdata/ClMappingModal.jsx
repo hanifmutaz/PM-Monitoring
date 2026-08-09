@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useClMapping, useClMappingMutations } from '../../hooks/useClMapping';
+import { useConfirm } from '../../contexts/ConfirmDialogContext';
 import Modal from '../Modal';
 
 const emptyForm = { cl_no: '', product_name: '', jig_name: '' };
@@ -9,6 +10,7 @@ const emptyForm = { cl_no: '', product_name: '', jig_name: '' };
 function ClMappingModal({ part, onClose }) {
   const { data: mappings = [], isLoading } = useClMapping(part.id);
   const { create, remove } = useClMappingMutations(part.id);
+  const confirm = useConfirm();
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
 
@@ -24,7 +26,7 @@ function ClMappingModal({ part, onClose }) {
   }
 
   async function handleRemove(id) {
-    if (!confirm('Hapus mapping ini?')) return;
+    if (!(await confirm('Hapus mapping ini?'))) return;
     await remove.mutateAsync(id);
   }
 

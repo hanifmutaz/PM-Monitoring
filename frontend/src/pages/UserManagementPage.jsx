@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { usePageHeader } from '../contexts/PageHeaderContext';
 import { useUsers, useUserMutations } from '../hooks/useUsers';
 import { useRoles, usePermissionCatalog, useRoleMutations } from '../hooks/useRoles';
+import { useConfirm } from '../contexts/ConfirmDialogContext';
 import Modal from '../components/Modal';
 import ToggleSwitch from '../components/ToggleSwitch';
 
@@ -126,6 +127,7 @@ function PendingApprovalSection() {
   const { data: pendingUsers = [], isLoading } = useUsers({ status: 'PENDING' });
   const { approve, reject } = useUserMutations();
   const { data: roles = [] } = useRoles();
+  const confirm = useConfirm();
   const [roleSelections, setRoleSelections] = useState({});
   const [error, setError] = useState('');
 
@@ -144,7 +146,7 @@ function PendingApprovalSection() {
   }
 
   async function handleReject(user) {
-    if (!confirm(`Tolak pendaftaran "${user.username}"?`)) return;
+    if (!(await confirm(`Tolak pendaftaran "${user.username}"?`))) return;
     setError('');
     try {
       await reject.mutateAsync(user.id);
@@ -234,6 +236,7 @@ function RoleManagementSection() {
   const { data: roles = [], isLoading } = useRoles();
   const { data: permissionCatalog = [] } = usePermissionCatalog();
   const { create, updatePermissions, remove } = useRoleMutations();
+  const confirm = useConfirm();
   const [newRoleName, setNewRoleName] = useState('');
   const [newRolePerms, setNewRolePerms] = useState([]);
   const [error, setError] = useState('');
@@ -273,7 +276,7 @@ function RoleManagementSection() {
   }
 
   async function handleDelete(role) {
-    if (!confirm(`Hapus role "${role.name}"? Role ini harus tidak dipakai user manapun.`)) return;
+    if (!(await confirm(`Hapus role "${role.name}"? Role ini harus tidak dipakai user manapun.`))) return;
     setError('');
     try {
       await remove.mutateAsync(role.id);

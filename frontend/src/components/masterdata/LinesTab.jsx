@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { fetchLines } from '../../api/linesApi';
 import { useLineMutations } from '../../hooks/useLineMutations';
+import { useConfirm } from '../../contexts/ConfirmDialogContext';
 import Modal from '../Modal';
 
 const emptyForm = { line_name: '', auto_reset_weekly_on_monthly: '' };
@@ -87,11 +88,12 @@ function LinesTab() {
     queryFn: () => fetchLines({}),
   });
   const { update, remove } = useLineMutations();
+  const confirm = useConfirm();
   const [modalState, setModalState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', line }
   const [deleteError, setDeleteError] = useState('');
 
   async function handleDelete(line) {
-    if (!confirm(`Hapus Line "${line.line_name}"?`)) return;
+    if (!(await confirm(`Hapus Line "${line.line_name}"?`))) return;
     setDeleteError('');
     try {
       await remove.mutateAsync(line.id);

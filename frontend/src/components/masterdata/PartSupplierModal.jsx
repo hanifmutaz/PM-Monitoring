@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Plus, Trash2, Star } from 'lucide-react';
 import { usePartSuppliers, usePartSupplierMutations } from '../../hooks/usePartSuppliers';
 import { useSuppliers } from '../../hooks/useSuppliers';
+import { useConfirm } from '../../contexts/ConfirmDialogContext';
 import Modal from '../Modal';
 
 const emptyForm = { supplier_id: '', notes: '' };
@@ -11,6 +12,7 @@ function PartSupplierModal({ part, onClose }) {
   const { data: links = [], isLoading } = usePartSuppliers(part.id);
   const { data: allSuppliers = [] } = useSuppliers({ isActive: true });
   const { create, setPrimary, remove } = usePartSupplierMutations(part.id);
+  const confirm = useConfirm();
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
 
@@ -32,7 +34,7 @@ function PartSupplierModal({ part, onClose }) {
   }
 
   async function handleRemove(id) {
-    if (!confirm('Lepas Supplier ini dari Part?')) return;
+    if (!(await confirm('Lepas Supplier ini dari Part?'))) return;
     await remove.mutateAsync(id);
   }
 

@@ -5,6 +5,7 @@ import { useInventoryItems, useInventoryRopStatus } from '../../hooks/useInvento
 import { useInventoryItemDetail, useInventoryMovements } from '../../hooks/useInventoryItemDetail';
 import { useInventoryMutations } from '../../hooks/useInventoryMutations';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
+import { useConfirm } from '../../contexts/ConfirmDialogContext';
 import Modal from '../Modal';
 import SearchBar from '../SearchBar';
 import Pagination from '../Pagination';
@@ -365,11 +366,12 @@ function InventoryTab() {
   const { data, isLoading } = useInventoryItems({ search: debouncedSearch || undefined, page, limit });
   const { data: ropData } = useInventoryRopStatus();
   const { remove } = useInventoryMutations();
+  const confirm = useConfirm();
 
   const ropById = new Map((ropData || []).map((r) => [r.id, r]));
 
   async function handleDelete(item) {
-    if (!confirm(`Hapus Inventory Item "${item.spare_part_number}"?`)) return;
+    if (!(await confirm(`Hapus Inventory Item "${item.spare_part_number}"?`))) return;
     setActionError('');
     try {
       await remove.mutateAsync(item.id);

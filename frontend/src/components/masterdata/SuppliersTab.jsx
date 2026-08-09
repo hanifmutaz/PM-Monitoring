@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { useSuppliers } from '../../hooks/useSuppliers';
 import { useSupplierMutations } from '../../hooks/useSupplierMutations';
+import { useConfirm } from '../../contexts/ConfirmDialogContext';
 import Modal from '../Modal';
 
 const emptyForm = { supplier_name: '', contact_person: '', phone: '', email: '', address: '', notes: '' };
@@ -127,11 +128,12 @@ function SupplierFormModal({ initial, onClose }) {
 function SuppliersTab() {
   const { data: suppliers = [], isLoading } = useSuppliers({ isActive: undefined });
   const { update, remove } = useSupplierMutations();
+  const confirm = useConfirm();
   const [modalState, setModalState] = useState(null); // null | { mode: 'create' } | { mode: 'edit', supplier }
   const [deleteError, setDeleteError] = useState('');
 
   async function handleDelete(supplier) {
-    if (!confirm(`Hapus Supplier "${supplier.supplier_name}"?`)) return;
+    if (!(await confirm(`Hapus Supplier "${supplier.supplier_name}"?`))) return;
     setDeleteError('');
     try {
       await remove.mutateAsync(supplier.id);

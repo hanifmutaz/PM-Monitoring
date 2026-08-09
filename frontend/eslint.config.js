@@ -7,6 +7,22 @@ import globals from 'globals';
 export default [
     js.configs.recommended,
     {
+        // vite.config.js jalan di Node (bukan browser) saat build/dev -
+        // butuh globals Node (__dirname, process, dst), beda sama kode di
+        // src/ yang jalan di browser. Dipisah biar globals.browser di bawah
+        // gak nutupin __dirname yang emang valid di sini (Vite bundle
+        // config file secara CJS, __dirname otomatis kesedia meski
+        // package.json punya "type": "module").
+        files: ['vite.config.js'],
+        languageOptions: {
+            ecmaVersion: 2022,
+            sourceType: 'module',
+            globals: {
+                ...globals.node,
+            },
+        },
+    },
+    {
         files: ['src/**/*.{js,jsx}'],
         plugins: {
             react,
