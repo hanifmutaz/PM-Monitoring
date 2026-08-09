@@ -1,4 +1,9 @@
 // src/components/LineStatusDonut.jsx
+// Reskin: props & output visual PERSIS sama - cuma layout/warna statis
+// diganti utility Tailwind. Conic-gradient donut TETAP inline style (nilainya
+// dihitung dari props saat render, gak bisa jadi utility class statis).
+const DOT_CLASS = { ok: 'bg-ok', warn: 'bg-warn', danger: 'bg-danger' };
+
 function LineStatusDonut({ healthy = 0, warning = 0, critical = 0, totalLabel = 'Total Line' }) {
   const total = healthy + warning + critical;
   const pct = (n) => (total > 0 ? (n / total) * 100 : 0);
@@ -14,37 +19,18 @@ function LineStatusDonut({ healthy = 0, warning = 0, critical = 0, totalLabel = 
   )`;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+    <div className="flex items-center gap-6">
       <div
-        style={{
-          width: 180,
-          height: 180,
-          borderRadius: '50%',
-          background: total > 0 ? gradient : 'var(--panel-3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}
+        className="flex h-[180px] w-[180px] shrink-0 items-center justify-center rounded-full"
+        style={{ background: total > 0 ? gradient : 'var(--panel-3)' }}
       >
-        <div
-          style={{
-            width: 120,
-            height: 120,
-            borderRadius: '50%',
-            background: 'var(--panel)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <div className="kpi-value">{total}</div>
-          <div className="caption">{totalLabel}</div>
+        <div className="flex h-[120px] w-[120px] flex-col items-center justify-center rounded-full bg-card">
+          <div className="font-[var(--font-display)] text-[30px] font-semibold">{total}</div>
+          <div className="text-[11px] text-[var(--text-faint)]">{totalLabel}</div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div className="flex flex-col gap-2.5">
         <StatusRow color="ok" label="Sehat" value={healthy} />
         <StatusRow color="warn" label="Perlu Perhatian" value={warning} />
         <StatusRow color="danger" label="Kritis" value={critical} />
@@ -55,12 +41,10 @@ function LineStatusDonut({ healthy = 0, warning = 0, critical = 0, totalLabel = 
 
 function StatusRow({ color, label, value }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ width: 8, height: 8, borderRadius: '50%', background: `var(--${color})` }} />
-      <span style={{ fontSize: 13, color: 'var(--text-dim)', minWidth: 110 }}>{label}</span>
-      <span className="mono" style={{ fontWeight: 600 }}>
-        {value}
-      </span>
+    <div className="flex items-center gap-2">
+      <span className={`h-2 w-2 rounded-full ${DOT_CLASS[color]}`} />
+      <span className="min-w-[110px] text-[13px] text-muted-foreground">{label}</span>
+      <span className="font-[var(--font-mono)] font-semibold">{value}</span>
     </div>
   );
 }

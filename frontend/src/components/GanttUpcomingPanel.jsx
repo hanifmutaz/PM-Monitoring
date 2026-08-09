@@ -1,4 +1,8 @@
 // src/components/GanttUpcomingPanel.jsx
+// Reskin: props (items) & output visual PERSIS sama - inline style diganti
+// utility Tailwind. Grid-template-columns tetap inline style karena jumlah
+// kolom dihitung dinamis (DAYS_AHEAD + 1), bukan angka tetap yang bisa jadi
+// utility class statis.
 import dayjs from 'dayjs';
 import 'dayjs/locale/id';
 
@@ -22,26 +26,36 @@ function groupByLine(items) {
   return Array.from(map.entries());
 }
 
-const STATUS_COLOR = { OK: 'var(--ok)', WARNING: 'var(--warn)', DANGER: 'var(--danger)' };
+const STATUS_CLASS = { OK: 'bg-ok', WARNING: 'bg-warn', DANGER: 'bg-danger' };
 
 function GanttUpcomingPanel({ items = [] }) {
   const columns = buildColumns();
   const rows = groupByLine(items);
 
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <h2 className="panel-title">Upcoming PM (7 Hari ke Depan)</h2>
+    <div className="rounded-lg border border-border bg-card p-4.5">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="m-0 font-[var(--font-display)] text-[15px] font-semibold">
+          Upcoming PM (7 Hari ke Depan)
+        </h2>
       </div>
 
       {rows.length === 0 ? (
-        <div className="empty-state">Gak ada jadwal PM dalam 7 hari ke depan.</div>
+        <div className="py-5.5 px-4 text-center text-[var(--text-faint)]">
+          Gak ada jadwal PM dalam 7 hari ke depan.
+        </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: `150px repeat(${columns.length}, 1fr)`, gap: 4 }}>
+        <div className="overflow-x-auto">
+          <div
+            className="grid gap-1"
+            style={{ gridTemplateColumns: `150px repeat(${columns.length}, 1fr)` }}
+          >
             <div />
             {columns.map((col) => (
-              <div key={col.key} className="table-header-text" style={{ textAlign: 'center', padding: '4px 0' }}>
+              <div
+                key={col.key}
+                className="py-1 text-center font-[var(--font-mono)] text-[11px] font-medium uppercase tracking-[0.5px] text-[var(--text-faint)]"
+              >
                 {col.label}
               </div>
             ))}
@@ -59,33 +73,19 @@ function GanttUpcomingPanel({ items = [] }) {
 function RowContent({ lineName, lineItems, columns }) {
   return (
     <>
-      <div className="mono" style={{ fontSize: 12, padding: '10px 0', color: 'var(--text-dim)' }}>
-        {lineName}
-      </div>
+      <div className="py-2.5 font-[var(--font-mono)] text-xs text-muted-foreground">{lineName}</div>
       {columns.map((col) => {
         const dayItems = lineItems.filter((it) => it.estimated_date === col.key);
         return (
           <div
             key={col.key}
-            style={{
-              padding: '8px 0',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              gap: 4,
-              borderLeft: '1px solid var(--border-soft)',
-            }}
+            className="flex items-center justify-center gap-1 border-l border-[var(--border-soft)] py-2"
           >
             {dayItems.map((it, idx) => (
               <span
                 key={idx}
                 title={`${it.label} (${it.status})`}
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: STATUS_COLOR[it.status] || 'var(--text-faint)',
-                }}
+                className={`h-2 w-2 rounded-full ${STATUS_CLASS[it.status] || 'bg-[var(--text-faint)]'}`}
               />
             ))}
           </div>
